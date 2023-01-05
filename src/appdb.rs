@@ -11,6 +11,7 @@ pub struct AppDB {
     db_map: HashMap<String, String>,
     db_path: String,
     is_locked: bool,
+    version: String,
 }
 
 impl AppDB {
@@ -22,6 +23,7 @@ impl AppDB {
             db_map: HashMap::<String, String>::with_capacity(100),
             db_path: "digisafe.db".into(),
             is_locked: true,
+            version: "0000".into(),
         }
     }
 
@@ -34,7 +36,6 @@ impl AppDB {
         }
         self.lock();
         aval
-
     }
 
     pub fn set(&mut self, akey: String, aval: String) {
@@ -47,40 +48,47 @@ impl AppDB {
     }
 
     pub fn set_password(&mut self, raw_password: String) {
-        self.password = AppDB::hash_argon2(raw_password);
+        self.password = AppDB::hash_password(raw_password);
     }
 
     pub fn load(&mut self) -> String {
+        self.lock();
         let db_path = std::path::Path::new(&self.db_path);
         if db_path.exists() {
             let rdb = std::fs::read_to_string(db_path);
             if rdb.is_ok() {
-                self.db_map_enc = rdb.unwrap();
+                let raw_db = rdb.unwrap();
+                self.version = raw_db[0..4].to_string();
+                self.db_map_enc = raw_db[4..].to_string();
                 self.unlock()
             } else {
                 "load failure E1".into()
             }
         } else {
+            self.is_locked = false;
             "unlocked".into()
         }
+    }
+
+    fn now() -> u64 {
+        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
     }
 
     pub fn save(&mut self) -> String {
         self.unlock();
         let dbstr = serde_json::to_string(&self.db_map).unwrap();
-        self.db_map.clear();
-        self.is_locked = true;
-        let dbstr_enc = AppDB::encrypt(dbstr, self.password);
+        self.lock();
+        let dbstr_enc = self.version.to_string() + &AppDB::encrypt(dbstr, self.password);
         let db_path_tmp = ".".to_string() + &self.db_path;
         let wr1 = std::fs::write(&db_path_tmp, &dbstr_enc);
         if wr1.is_ok() {
             let wr2 = std::fs::rename(&db_path_tmp, &self.db_path);
             if wr2.is_ok() {
-                let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs(); 
+                let ts = AppDB::now();
                 let archive_path = std::path::Path::new("archive");
                 let wr3 = std::fs::create_dir_all(archive_path);
                 if wr3.is_ok() {
-                    let wr4 = std::fs::copy(&self.db_path, archive_path.join(format!("digisafe_{now}.db")));
+                    let wr4 = std::fs::copy(&self.db_path, archive_path.join(format!("digisafe_{ts}.db")));
                     if wr4.is_ok() {
                         let res = AppDB::upload_db(&dbstr_enc);
                         if res.is_ok() {
@@ -129,7 +137,7 @@ impl AppDB {
         self.is_locked = true;
     }
 
-    fn hash_argon2(password: String) -> [u8; 32] {
+    fn hash_password(password: String) -> [u8; 32] {
         let salt = b"digisafe";
         let config = argon2::Config {
             variant: argon2::Variant::Argon2id,

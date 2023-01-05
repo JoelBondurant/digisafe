@@ -51,16 +51,19 @@ fn build_ui(app: &gtk::Application) {
     let db_get = Arc::clone(&db);
     let key_get = Rc::clone(&key_entry);
     let val_get = Rc::clone(&val_entry);
+    let main_box2 = Rc::clone(&main_box);
     get_button.connect_clicked(move |_| {
+        main_box2.borrow().set_sensitive(false);
         let key = key_get.borrow().text().to_string();
         if let Some(val) = db_get.write().unwrap().get(&key) {
             val_get.borrow_mut().buffer().set_text(&val);
         } else {
             val_get.borrow_mut().buffer().set_text("");
         }
+        main_box2.borrow().set_sensitive(true);
     });
     get_button.set_size_request(140, 20);
-    
+
     let set_button = gtk::Button::builder()
         .label("Set")
         .margin_top(20)
@@ -71,11 +74,14 @@ fn build_ui(app: &gtk::Application) {
     let db_set = Arc::clone(&db);
     let key_set = Rc::clone(&key_entry);
     let val_set = Rc::clone(&val_entry);
+    let main_box2 = Rc::clone(&main_box);
     set_button.connect_clicked(move |_| {
+        main_box2.borrow().set_sensitive(false);
         let key = key_set.borrow().text().to_string();
         let bounds = val_set.borrow().buffer().bounds();
         let val = val_set.borrow().buffer().text(&bounds.0, &bounds.1, false).to_string();
         db_set.write().unwrap().set(key, val);
+        main_box2.borrow().set_sensitive(true);
     });
     set_button.set_size_request(140, 20);
 
@@ -88,17 +94,21 @@ fn build_ui(app: &gtk::Application) {
         .build();
     let (save_sender, save_receiver) = gtk::glib::MainContext::channel::<String>(gtk::glib::PRIORITY_DEFAULT);
     let status_bar2 = Rc::clone(&status_bar);
+    let main_box2 = Rc::clone(&main_box);
     save_receiver.attach(None, move|msg| {
         status_bar2.borrow().push(0, &msg);
-        gtk::glib::Continue(false)
+        main_box2.borrow().set_sensitive(true);
+        gtk::glib::Continue(true)
     });
     let db_save = Arc::clone(&db);
+    let main_box2 = Rc::clone(&main_box);
     save_button.connect_clicked(move |_| {
+        main_box2.borrow().set_sensitive(false);
         let db_save = Arc::clone(&db_save);
         let save_sender = save_sender.clone();
         std::thread::spawn(move || {
             let msg = db_save.write().unwrap().save();
-            save_sender.send(msg).unwrap();
+            save_sender.send(msg).expect("save sender error");
         });
     });
     save_button.set_size_request(140, 20);
