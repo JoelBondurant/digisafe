@@ -7,9 +7,9 @@ use sha1::Sha1;
 use sha3::Sha3_256;
 
 pub struct AppDB {
-    db_map: HashMap<String, String>,
     db_enc: String,
     db_id: String,
+    db_map: HashMap<String, String>,
     password: [u8; 32],
     revision: String,
     version: String,
@@ -19,9 +19,9 @@ impl AppDB {
 
     pub fn new() -> Self {
         AppDB {
-            db_map: HashMap::<String, String>::with_capacity(100),
             db_enc: "".to_owned(),
             db_id: "00000000".to_owned(),
+            db_map: HashMap::<String, String>::with_capacity(100),
             password: [0; 32],
             revision: "00000000".to_owned(),
             version: "00000000".to_owned(),
@@ -89,17 +89,53 @@ impl AppDB {
         if self.db_path().exists() {
             let rdb = std::fs::read_to_string(self.db_path());
             if rdb.is_ok() {
-                let raw_db = rdb.unwrap();
-                self.version = raw_db[..8].to_owned();
-                self.db_id = raw_db[8..16].to_owned();
-                self.revision = raw_db[16..24].to_owned();
-                self.db_enc = raw_db.to_owned();
+                let rdb = rdb.unwrap();
+                let version = rdb[..8].to_owned();
+                let db_id = rdb[8..16].to_owned();
+                let revision = rdb[16..24].to_owned();
+                let db_enc = rdb.to_owned();
+                let rdb_bak = self.download_db();
+                assert_eq!(self.db_id, db_id);
+                assert_eq!(self.version, version);
+                if rdb_bak != "" {
+                    let version_bak = rdb_bak[..8].to_owned();
+                    let db_id_bak = rdb_bak[8..16].to_owned();
+                    let revision_bak = rdb_bak[16..24].to_owned();
+                    let db_enc_bak = rdb_bak.to_owned();
+                    assert_eq!(self.db_id, db_id_bak);
+                    if version_bak == version && revision_bak > revision {
+                        self.db_enc = db_enc_bak;
+                        self.revision = revision_bak;
+                    } else {
+                        self.db_enc = db_enc;
+                        self.revision = revision;
+                    }
+                } else {
+                    self.db_enc = db_enc;
+                    self.revision = revision;
+                }
                 self.unlock()
             } else {
                 "load failure E1".into()
             }
         } else {
-            "unlocked".into()
+            let rdb_bak = self.download_db();
+            if rdb_bak != "" {
+                let version_bak = rdb_bak[..8].to_owned();
+                let db_id_bak = rdb_bak[8..16].to_owned();
+                let revision_bak = rdb_bak[16..24].to_owned();
+                let db_enc_bak = rdb_bak.to_owned();
+                assert_eq!(self.db_id, db_id_bak);
+                if version_bak == self.version {
+                    self.db_enc = db_enc_bak;
+                    self.revision = revision_bak;
+                    self.unlock()
+                } else {
+                    "unlocked".into()
+                }
+            } else {
+                "unlocked".into()
+            }
         }
     }
 
@@ -228,7 +264,7 @@ impl AppDB {
         let mut sha1_hasher: Sha1 = Sha1::new();
         sha1_hasher.update(self.db_enc.as_bytes());
         let sha1_hash = hex::encode(sha1_hasher.finalize());
-        let file_path = format!("{}/{}", self.db_id, self.db_path().file_name().unwrap().to_str().unwrap());
+        let file_path = format!("{}/{}", self.db_id, "digisafe.db");
         let upload_req = b2.post(upload_url).body(self.db_enc.to_string())
             .header("Authorization", format!("{upload_token}"))
             .header("X-Bz-File-Name", file_path)
@@ -239,6 +275,28 @@ impl AppDB {
             .build().unwrap();
         let upload_resp = b2.execute(upload_req).unwrap().text();
         upload_resp
+    }
+
+    fn download_db(&self) -> String {
+        let api_config: HashMap<String, String> = serde_json::from_str(&std::fs::read_to_string("/secrets/backblaze.json").unwrap()).unwrap();
+        let api_key = base64::encode(format!("{}:{}", api_config["key_id"], api_config["app_key"]));
+        let auth_url = "https://api.backblazeb2.com/b2api/v2/b2_authorize_account";
+        let b2 = reqwest::blocking::Client::new();
+        let auth_req = b2.get(auth_url).header("Authorization", format!("Basic {api_key}")).build().unwrap();
+        let auth_resp = b2.execute(auth_req).unwrap().text().unwrap();
+        let auth: HashMap<String, serde_json::Value> = serde_json::from_str(&auth_resp).unwrap();
+        let auth_token = auth["authorizationToken"].clone().as_str().unwrap().to_string();
+        let download_url = auth["downloadUrl"].clone().as_str().unwrap().to_string();
+        let db_id = self.db_id.to_string();
+        let download_req = b2.get(format!("{download_url}/file/digisafe/{db_id}/digisafe.db"))
+            .header("Authorization", format!("{auth_token}"))
+            .build().unwrap();
+        let download_resp = b2.execute(download_req).unwrap();
+        if download_resp.status() == 200 {
+            download_resp.text().unwrap()
+        } else {
+            "".to_owned()
+        }
     }
 
 }
