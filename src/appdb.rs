@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::SystemTime;
+use std::path::PathBuf;
 
 use chacha20poly1305::XChaCha20Poly1305;
 use chacha20poly1305::aead::{Aead, KeyInit};
@@ -9,8 +9,7 @@ use sha3::Sha3_256;
 pub struct AppDB {
     db_map: HashMap<String, String>,
     db_enc: String,
-    db_path: String,
-    dbid: String,
+    db_id: String,
     password: [u8; 32],
     revision: String,
     version: String,
@@ -22,8 +21,7 @@ impl AppDB {
         AppDB {
             db_map: HashMap::<String, String>::with_capacity(100),
             db_enc: "".to_owned(),
-            db_path: "digisafe.db".to_owned(),
-            dbid: "00000000".to_owned(),
+            db_id: "00000000".to_owned(),
             password: [0; 32],
             revision: "00000000".to_owned(),
             version: "00000000".to_owned(),
@@ -45,10 +43,14 @@ impl AppDB {
         use sha3::Digest;
         self.unlock();
         if akey.len() > 0 {
-            self.db_map.insert(akey, aval);
+            if aval.len() > 0 {
+                self.db_map.insert(akey, aval);
+            } else {
+                self.db_map.remove(&akey);
+            }
         }
         let db_map_str = serde_json::to_string(&self.db_map).unwrap();
-        let pre_prefix = self.version.to_string() + &self.dbid + &self.revision; // 8 + 8 + 8 = 24
+        let pre_prefix = self.version.to_string() + &self.db_id + &self.revision; // 8 + 8 + 8 = 24
         assert_eq!(pre_prefix.len(), 24);
         let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &pre_prefix + &db_map_str).try_into().unwrap();
         let nonce: [u8; 24] = hmac[..24].try_into().unwrap();
@@ -63,22 +65,33 @@ impl AppDB {
         self.password = AppDB::hash_password(raw_password);
     }
 
-    /*
-    pub fn set_dbid(&mut self, raw_dbid: String) {
+    pub fn set_db_id(&mut self, raw_dbid: String) {
         assert!(raw_dbid.len() <= 8);
-        self.dbid = format!("{:0>8}", raw_dbid);
+        self.db_id = format!("{:0>8}", raw_dbid);
+        self.set("".into(), "".into());
     }
-    */
-    
+
+    fn db_path(&self) -> PathBuf {
+        PathBuf::from(format!("digisafe_{}.db", self.db_id))
+    }
+
+    fn db_path_hidden(&self) -> PathBuf {
+        PathBuf::from(format!(".digisafe_{}.db", self.db_id))
+    }
+
+    fn db_path_archive(&self) -> PathBuf {
+        let archive_root = PathBuf::from("archive").join(&self.db_id);
+        let archive_file = PathBuf::from(format!("digisafe_{}.db", self.revision));
+        archive_root.join(archive_file)
+    }
+
     pub fn load(&mut self) -> String {
-        self.lock();
-        let db_path = std::path::Path::new(&self.db_path);
-        if db_path.exists() {
-            let rdb = std::fs::read_to_string(db_path);
+        if self.db_path().exists() {
+            let rdb = std::fs::read_to_string(self.db_path());
             if rdb.is_ok() {
                 let raw_db = rdb.unwrap();
                 self.version = raw_db[..8].to_owned();
-                self.dbid = raw_db[8..16].to_owned();
+                self.db_id = raw_db[8..16].to_owned();
                 self.revision = raw_db[16..24].to_owned();
                 self.db_enc = raw_db.to_owned();
                 self.unlock()
@@ -90,25 +103,18 @@ impl AppDB {
         }
     }
 
-    fn now() -> u64 {
-        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
-    }
-
     pub fn save(&mut self) -> String {
         self.revision = format!("{:0>8}", self.revision.parse::<u16>().unwrap() + 1);
         self.set("".into(), "".into());
-        let db_path_tmp = ".".to_string() + &self.db_path;
-        let wr1 = std::fs::write(&db_path_tmp, &self.db_enc);
+        let wr1 = std::fs::write(self.db_path_hidden(), &self.db_enc);
         if wr1.is_ok() {
-            let wr2 = std::fs::rename(&db_path_tmp, &self.db_path);
+            let wr2 = std::fs::rename(self.db_path_hidden(), &self.db_path());
             if wr2.is_ok() {
-                let ts = AppDB::now();
-                let archive_path = std::path::Path::new("archive");
-                let wr3 = std::fs::create_dir_all(archive_path);
+                let wr3 = std::fs::create_dir_all(self.db_path_archive().parent().unwrap());
                 if wr3.is_ok() {
-                    let wr4 = std::fs::copy(&self.db_path, archive_path.join(format!("digisafe_{ts}.db")));
+                    let wr4 = std::fs::copy(self.db_path(), self.db_path_archive());
                     if wr4.is_ok() {
-                        let res = AppDB::backup_db(&self.db_enc);
+                        let res = self.backup_db();
                         if res.is_ok() {
                             "saved".into()
                         } else {
@@ -130,7 +136,6 @@ impl AppDB {
 
     fn unlock(&mut self) -> String {
         use sha3::Digest;
-        self.lock();
         if self.db_enc == "" {
             "unlocked".into()
         } else {
@@ -200,7 +205,7 @@ impl AppDB {
         }
     }
 
-    fn backup_db(dbstr_enc: &str) -> Result<String, reqwest::Error> {
+    fn backup_db(&self) -> Result<String, reqwest::Error> {
         use sha1::Digest;
         let api_config: HashMap<String, String> = serde_json::from_str(&std::fs::read_to_string("/secrets/backblaze.json").unwrap()).unwrap();
         let api_key = base64::encode(format!("{}:{}", api_config["key_id"], api_config["app_key"]));
@@ -221,11 +226,12 @@ impl AppDB {
         let upload_url = upload_url_resp_map["uploadUrl"].clone().as_str().unwrap().to_string();
         let upload_token = upload_url_resp_map["authorizationToken"].clone().as_str().unwrap().to_string();
         let mut sha1_hasher: Sha1 = Sha1::new();
-        sha1_hasher.update(dbstr_enc.as_bytes());
+        sha1_hasher.update(self.db_enc.as_bytes());
         let sha1_hash = hex::encode(sha1_hasher.finalize());
-        let upload_req = b2.post(upload_url).body(dbstr_enc.to_string())
+        let file_path = format!("{}/{}", self.db_id, self.db_path().file_name().unwrap().to_str().unwrap());
+        let upload_req = b2.post(upload_url).body(self.db_enc.to_string())
             .header("Authorization", format!("{upload_token}"))
-            .header("X-Bz-File-Name", "digisafe.db")
+            .header("X-Bz-File-Name", file_path)
             .header("Content-Type", "text/plain")
             .header("X-Bz-Content-Sha1", sha1_hash)
             .header("X-Bz-Info-Author", "DigiSafe")

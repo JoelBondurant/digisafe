@@ -163,6 +163,14 @@ fn build_ui(app: &gtk::Application) {
 
 
 async fn unlock_dialog<W: gtk::glib::IsA<gtk::Window>>(window: Rc<W>, db: Arc<RwLock<appdb::AppDB>>, sender: gtk::glib::Sender<String>) {
+    let db_id_entry = gtk::Entry::builder()
+        .margin_top(10)
+        .margin_bottom(10)
+        .margin_start(10)
+        .margin_end(10)
+        .max_length(8)
+        .tooltip_text("DB_ID")
+        .build();
     let password_entry = gtk::PasswordEntry::builder()
         .margin_top(10)
         .margin_bottom(10)
@@ -183,11 +191,12 @@ async fn unlock_dialog<W: gtk::glib::IsA<gtk::Window>>(window: Rc<W>, db: Arc<Rw
         .orientation(gtk::Orientation::Vertical)
         .halign(gtk::Align::Center)
         .build();
+    dialog_box.append(&db_id_entry);
     dialog_box.append(&password_entry);
     dialog_box.append(&unlock_button);
     let dialog = Rc::new(gtk::Dialog::builder()
         .transient_for(&*window)
-        .title("Enter Password")
+        .title("Unlock Database")
         .default_height(100)
         .default_width(300)
         .modal(true)
@@ -196,10 +205,12 @@ async fn unlock_dialog<W: gtk::glib::IsA<gtk::Window>>(window: Rc<W>, db: Arc<Rw
     let dialog_clone = Rc::clone(&dialog);
     let dbc = Arc::clone(&db);
     unlock_button.connect_clicked(move |_| {
+        let raw_db_id = db_id_entry.text().to_string();
         let raw_password = password_entry.text().to_string();
         let dbcc = Arc::clone(&dbc);
         let sender = sender.clone();
         std::thread::spawn(move || {
+            dbcc.write().unwrap().set_db_id(raw_db_id);
             dbcc.write().unwrap().set_password(raw_password);
             let msg = dbcc.write().unwrap().load();
             sender.send(msg).expect("unlock failure");
