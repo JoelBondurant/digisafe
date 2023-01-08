@@ -7,10 +7,12 @@ use sha1::Sha1;
 use sha3::Sha3_256;
 
 pub struct AppDB {
-    db_map_enc: String,
-    password: [u8; 32],
     db_map: HashMap<String, String>,
+    db_enc: String,
     db_path: String,
+    dbid: String,
+    password: [u8; 32],
+    revision: String,
     version: String,
 }
 
@@ -18,11 +20,13 @@ impl AppDB {
 
     pub fn new() -> Self {
         AppDB {
-            db_map_enc: "".into(),
-            password: [0; 32],
             db_map: HashMap::<String, String>::with_capacity(100),
-            db_path: "digisafe.db".into(),
-            version: "0000".into(),
+            db_enc: "".to_owned(),
+            db_path: "digisafe.db".to_owned(),
+            dbid: "00000000".to_owned(),
+            password: [0; 32],
+            revision: "00000000".to_owned(),
+            version: "00000000".to_owned(),
         }
     }
 
@@ -40,14 +44,18 @@ impl AppDB {
     pub fn set(&mut self, akey: String, aval: String) {
         use sha3::Digest;
         self.unlock();
-        self.db_map.insert(akey, aval);
-        let dbstr = serde_json::to_string(&self.db_map).unwrap();
-        let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &dbstr).try_into().unwrap();
+        if akey.len() > 0 {
+            self.db_map.insert(akey, aval);
+        }
+        let db_map_str = serde_json::to_string(&self.db_map).unwrap();
+        let pre_prefix = self.version.to_string() + &self.dbid + &self.revision; // 8 + 8 + 8 = 24
+        assert_eq!(pre_prefix.len(), 24);
+        let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &pre_prefix + &db_map_str).try_into().unwrap();
         let nonce: [u8; 24] = hmac[..24].try_into().unwrap();
-        let prefix = self.version.to_string() + &base64::encode(&nonce); // 4 + 32 = 36
-        assert_eq!(prefix.len(), 36);
-        let dbstr_enc = prefix + &AppDB::encrypt(dbstr, self.password, &nonce);
-        self.db_map_enc = dbstr_enc;
+        let prefix = pre_prefix + &base64::encode(&nonce); // 24 + 32 = 56
+        assert_eq!(prefix.len(), 56);
+        let db_str_enc = prefix + &AppDB::encrypt(db_map_str, self.password, &nonce);
+        self.db_enc = db_str_enc;
         self.lock();
     }
 
@@ -55,6 +63,13 @@ impl AppDB {
         self.password = AppDB::hash_password(raw_password);
     }
 
+    /*
+    pub fn set_dbid(&mut self, raw_dbid: String) {
+        assert!(raw_dbid.len() <= 8);
+        self.dbid = format!("{:0>8}", raw_dbid);
+    }
+    */
+    
     pub fn load(&mut self) -> String {
         self.lock();
         let db_path = std::path::Path::new(&self.db_path);
@@ -62,8 +77,10 @@ impl AppDB {
             let rdb = std::fs::read_to_string(db_path);
             if rdb.is_ok() {
                 let raw_db = rdb.unwrap();
-                self.version = raw_db[0..4].to_string();
-                self.db_map_enc = raw_db.to_string();
+                self.version = raw_db[..8].to_owned();
+                self.dbid = raw_db[8..16].to_owned();
+                self.revision = raw_db[16..24].to_owned();
+                self.db_enc = raw_db.to_owned();
                 self.unlock()
             } else {
                 "load failure E1".into()
@@ -77,9 +94,11 @@ impl AppDB {
         SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs()
     }
 
-    pub fn save(&self) -> String {
+    pub fn save(&mut self) -> String {
+        self.revision = format!("{:0>8}", self.revision.parse::<u16>().unwrap() + 1);
+        self.set("".into(), "".into());
         let db_path_tmp = ".".to_string() + &self.db_path;
-        let wr1 = std::fs::write(&db_path_tmp, &self.db_map_enc);
+        let wr1 = std::fs::write(&db_path_tmp, &self.db_enc);
         if wr1.is_ok() {
             let wr2 = std::fs::rename(&db_path_tmp, &self.db_path);
             if wr2.is_ok() {
@@ -89,7 +108,7 @@ impl AppDB {
                 if wr3.is_ok() {
                     let wr4 = std::fs::copy(&self.db_path, archive_path.join(format!("digisafe_{ts}.db")));
                     if wr4.is_ok() {
-                        let res = AppDB::upload_db(&self.db_map_enc);
+                        let res = AppDB::backup_db(&self.db_enc);
                         if res.is_ok() {
                             "saved".into()
                         } else {
@@ -112,18 +131,19 @@ impl AppDB {
     fn unlock(&mut self) -> String {
         use sha3::Digest;
         self.lock();
-        if self.db_map_enc == "" {
+        if self.db_enc == "" {
             "unlocked".into()
         } else {
-            let nonce: [u8; 24] = base64::decode(&self.db_map_enc[4..36]).unwrap().try_into().unwrap();
-            let db_map_enc = &self.db_map_enc[36..];
-            let dbstr = AppDB::decrypt(db_map_enc.into(), self.password, &nonce);
-            if dbstr.is_some() {
-                let dbstr = dbstr.unwrap();
-                let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &dbstr).try_into().unwrap();
+            let nonce: [u8; 24] = base64::decode(&self.db_enc[24..56]).unwrap().try_into().unwrap();
+            let db_map_enc = &self.db_enc[56..];
+            let db_map_str = AppDB::decrypt(db_map_enc.into(), self.password, &nonce);
+            if db_map_str.is_some() {
+                let db_map_str = db_map_str.unwrap();
+                let pre_prefix = &self.db_enc[..24];
+                let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &pre_prefix + &db_map_str).try_into().unwrap();
                 let nonce_check: [u8; 24] = hmac[..24].try_into().unwrap();
                 assert_eq!(nonce, nonce_check);
-                let rdb: Result<HashMap<String, String>, _> = serde_json::from_str(&dbstr);
+                let rdb: Result<HashMap<String, String>, _> = serde_json::from_str(&db_map_str);
                 if rdb.is_ok() {
                     self.db_map.extend(rdb.unwrap().into_iter());
                     "unlocked".into()
@@ -180,7 +200,7 @@ impl AppDB {
         }
     }
 
-    fn upload_db(dbstr_enc: &str) -> Result<String, reqwest::Error> {
+    fn backup_db(dbstr_enc: &str) -> Result<String, reqwest::Error> {
         use sha1::Digest;
         let api_config: HashMap<String, String> = serde_json::from_str(&std::fs::read_to_string("/secrets/backblaze.json").unwrap()).unwrap();
         let api_key = base64::encode(format!("{}:{}", api_config["key_id"], api_config["app_key"]));

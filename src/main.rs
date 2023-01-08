@@ -107,7 +107,7 @@ fn build_ui(app: &gtk::Application) {
         let db_save = Arc::clone(&db_save);
         let save_sender = save_sender.clone();
         std::thread::spawn(move || {
-            let msg = db_save.read().unwrap().save();
+            let msg = db_save.write().unwrap().save();
             save_sender.send(msg).expect("save sender error");
         });
     });
