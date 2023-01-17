@@ -1,4 +1,4 @@
-package com.example.digisafe.ui.theme
+package com.digisafe.app.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Shapes

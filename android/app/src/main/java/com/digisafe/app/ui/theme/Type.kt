@@ -1,4 +1,4 @@
-package com.example.digisafe.ui.theme
+package com.digisafe.app.ui.theme
 
 import androidx.compose.material.Typography
 import androidx.compose.ui.text.TextStyle

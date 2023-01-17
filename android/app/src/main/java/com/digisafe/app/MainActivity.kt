@@ -1,4 +1,4 @@
-package com.example.digisafe
+package com.digisafe.app
 
 import android.graphics.fonts.FontStyle
 import android.os.Bundle
@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.digisafe.ui.theme.DigiSafeTheme
+import com.digisafe.app.ui.theme.DigiSafeTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -3,11 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 android {
-    namespace = "com.example.digisafe"
+    namespace = "com.digisafe.app"
     compileSdk = 32
 
     defaultConfig {
-        applicationId = "com.example.digisafe"
+        applicationId = "com.digisafe.app"
         minSdk = 30
         targetSdk = 32
         versionCode = 1
