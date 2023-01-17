@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
@@ -35,6 +34,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.digisafe.app.ui.theme.DigiSafeTheme
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,13 +53,27 @@ fun MakeUI() {
     UnlockDialog()
 }
 
-class UnlockDialogViewModel : ViewModel() {
+class DigiSafeViewModel : ViewModel() {
+    private val _key = MutableLiveData("")
+    private val _value = MutableLiveData("")
     private val _isLocked = MutableLiveData(true)
     private val _dbId = MutableLiveData("")
     private val _rawPassword = MutableLiveData("")
+    val key = _key
+    val value = _value
     val isLocked = _isLocked
     val dbId = _dbId
     val rawPassword = _rawPassword
+    fun onKeyChange(newKey: String) {
+        if (newKey.length <= 32) {
+            _key.value = newKey
+        }
+    }
+    fun onValueChange(newValue: String) {
+        if (newValue.length <= 8000) {
+            _value.value = newValue
+        }
+    }
     fun onLockChange() {
         _isLocked.value = false
     }
@@ -76,17 +90,17 @@ class UnlockDialogViewModel : ViewModel() {
 }
 
 @Composable
-fun UnlockDialog(unlockDialogViewModel: UnlockDialogViewModel = viewModel()) {
-    val isLocked by unlockDialogViewModel.isLocked.observeAsState(initial = true)
-    val dbId by unlockDialogViewModel.dbId.observeAsState(initial = "")
-    val rawPassword by unlockDialogViewModel.rawPassword.observeAsState(initial = "")
+fun UnlockDialog(digiSafeViewModel: DigiSafeViewModel = viewModel()) {
+    val isLocked by digiSafeViewModel.isLocked.observeAsState(initial = true)
+    val dbId by digiSafeViewModel.dbId.observeAsState(initial = "")
+    val rawPassword by digiSafeViewModel.rawPassword.observeAsState(initial = "")
     UnlockDialogContent(
         isLocked = isLocked,
-        onLockChange = { unlockDialogViewModel.onLockChange() },
+        onLockChange = { digiSafeViewModel.onLockChange() },
         dbId = dbId,
-        onDbIdChange = { unlockDialogViewModel.onDbIdChange(it) },
+        onDbIdChange = { digiSafeViewModel.onDbIdChange(it) },
         rawPassword = rawPassword,
-        onRawPasswordChange = { unlockDialogViewModel.onRawPasswordChange(it) },
+        onRawPasswordChange = { digiSafeViewModel.onRawPasswordChange(it) },
     )
 }
 
@@ -143,8 +157,7 @@ fun UnlockDialogContent(
                     }
                 },
                 confirmButton = {
-                    Button(
-                        onClick = onLockChange) {
+                    Button(onClick = onLockChange) {
                         Text(
                             "Unlock",
                             style = TextStyle(
@@ -161,32 +174,16 @@ fun UnlockDialogContent(
     }
 }
 
-class MainScreenViewModel : ViewModel() {
-    private val _key = MutableLiveData("")
-    private val _value = MutableLiveData("")
-    val key = _key
-    val value = _value
-    fun onKeyChange(newKey: String) {
-        if (newKey.length <= 32) {
-            _key.value = newKey
-        }
-    }
-    fun onValueChange(newValue: String) {
-        if (newValue.length <= 8000) {
-            _value.value = newValue
-        }
-    }
-}
 
 @Composable
-fun MainScreen(mainScreenViewModel: MainScreenViewModel = viewModel()) {
-    val key by mainScreenViewModel.key.observeAsState(initial = "")
-    val value by mainScreenViewModel.value.observeAsState(initial = "")
+fun MainScreen(digiSafeViewModel: DigiSafeViewModel = viewModel()) {
+    val key by digiSafeViewModel.key.observeAsState(initial = "")
+    val value by digiSafeViewModel.value.observeAsState(initial = "")
     MainContent(
         key = key,
-        onKeyChange = { mainScreenViewModel.onKeyChange(it) },
+        onKeyChange = { digiSafeViewModel.onKeyChange(it) },
         value = value,
-        onValueChange = { mainScreenViewModel.onValueChange(it) },
+        onValueChange = { digiSafeViewModel.onValueChange(it) },
     )
 }
 
@@ -226,6 +223,46 @@ fun MainContent(
                     .background(Color.Transparent)
                     .fillMaxWidth()
             )
+            Row (
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Button(onClick = {}) {
+                    Text(
+                        "Get",
+                        style = TextStyle(
+                            color = MaterialTheme.colors.onPrimary,
+                            background = MaterialTheme.colors.primary,
+                            fontWeight = FontWeight(FontStyle.FONT_WEIGHT_BOLD),
+                        ),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(48.dp))
+                Button(onClick = {}) {
+                    Text(
+                        "Set",
+                        style = TextStyle(
+                            color = MaterialTheme.colors.onPrimary,
+                            background = MaterialTheme.colors.primary,
+                            fontWeight = FontWeight(FontStyle.FONT_WEIGHT_BOLD),
+                        ),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(48.dp))
+                Button(onClick = {}) {
+                    Text(
+                        "Save",
+                        style = TextStyle(
+                            color = MaterialTheme.colors.onPrimary,
+                            background = MaterialTheme.colors.primary,
+                            fontWeight = FontWeight(FontStyle.FONT_WEIGHT_BOLD),
+                        ),
+                        modifier = Modifier.padding(horizontal = 10.dp)
+                    )
+                }
+            }
         }
     }
 }
