@@ -64,6 +64,7 @@ class DigiSafeViewModel : ViewModel() {
     val isLocked = _isLocked
     val dbId = _dbId
     val rawPassword = _rawPassword
+    val dbMap = HashMap<String, String>()
     fun onKeyChange(newKey: String) {
         if (newKey.length <= 32) {
             _key.value = newKey
@@ -85,6 +86,23 @@ class DigiSafeViewModel : ViewModel() {
     fun onRawPasswordChange(newRawPassword: String) {
         if (newRawPassword.length <= 64) {
             _rawPassword.value = newRawPassword
+        }
+    }
+    fun onGet() {
+        if (_key.value !== null) {
+            val dbValue = dbMap.get(_key.value)
+            if (dbValue !== null) {
+                _value.value = dbValue
+            } else {
+                _value.value = ""
+            }
+        }
+    }
+    fun onSet() {
+        val kv = _key.value
+        val vv = _value.value
+        if (kv !== null && vv !== null) {
+            dbMap.put(kv, vv)
         }
     }
 }
@@ -184,6 +202,8 @@ fun MainScreen(digiSafeViewModel: DigiSafeViewModel = viewModel()) {
         onKeyChange = { digiSafeViewModel.onKeyChange(it) },
         value = value,
         onValueChange = { digiSafeViewModel.onValueChange(it) },
+        onGet = { digiSafeViewModel.onGet() },
+        onSet = { digiSafeViewModel.onSet() },
     )
 }
 
@@ -193,6 +213,8 @@ fun MainContent(
     onKeyChange: (String) -> Unit,
     value: String,
     onValueChange: (String) -> Unit,
+    onGet: () -> Unit,
+    onSet: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -227,7 +249,7 @@ fun MainContent(
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Button(onClick = {}) {
+                Button(onClick = onGet) {
                     Text(
                         "Get",
                         style = TextStyle(
@@ -239,7 +261,7 @@ fun MainContent(
                     )
                 }
                 Spacer(modifier = Modifier.width(48.dp))
-                Button(onClick = {}) {
+                Button(onClick = onSet) {
                     Text(
                         "Set",
                         style = TextStyle(
