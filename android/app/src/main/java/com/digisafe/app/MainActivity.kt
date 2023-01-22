@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -47,11 +48,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
 @Composable
 fun MakeUI() {
     MainScreen()
     UnlockDialog()
 }
+
 
 class DigiSafeViewModel : ViewModel() {
     private val _key = MutableLiveData("")
@@ -64,7 +67,7 @@ class DigiSafeViewModel : ViewModel() {
     val isLocked = _isLocked
     val dbId = _dbId
     val rawPassword = _rawPassword
-    val dbMap = HashMap<String, String>()
+    private val dbMap = HashMap<String, String>()
     fun onKeyChange(newKey: String) {
         if (newKey.length <= 32) {
             _key.value = newKey
@@ -90,7 +93,7 @@ class DigiSafeViewModel : ViewModel() {
     }
     fun onGet() {
         if (_key.value !== null) {
-            val dbValue = dbMap.get(_key.value)
+            val dbValue = dbMap[_key.value]
             if (dbValue !== null) {
                 _value.value = dbValue
             } else {
@@ -102,35 +105,17 @@ class DigiSafeViewModel : ViewModel() {
         val kv = _key.value
         val vv = _value.value
         if (kv !== null && vv !== null) {
-            dbMap.put(kv, vv)
+            dbMap[kv] = vv
         }
     }
 }
 
-@Composable
-fun UnlockDialog(digiSafeViewModel: DigiSafeViewModel = viewModel()) {
-    val isLocked by digiSafeViewModel.isLocked.observeAsState(initial = true)
-    val dbId by digiSafeViewModel.dbId.observeAsState(initial = "")
-    val rawPassword by digiSafeViewModel.rawPassword.observeAsState(initial = "")
-    UnlockDialogContent(
-        isLocked = isLocked,
-        onLockChange = { digiSafeViewModel.onLockChange() },
-        dbId = dbId,
-        onDbIdChange = { digiSafeViewModel.onDbIdChange(it) },
-        rawPassword = rawPassword,
-        onRawPasswordChange = { digiSafeViewModel.onRawPasswordChange(it) },
-    )
-}
 
 @Composable
-fun UnlockDialogContent(
-    isLocked: Boolean,
-    onLockChange: () -> Unit,
-    dbId: String,
-    onDbIdChange: (String) -> Unit,
-    rawPassword: String,
-    onRawPasswordChange: (String) -> Unit,
-) {
+fun UnlockDialog(vm: DigiSafeViewModel = viewModel()) {
+    val isLocked by vm.isLocked.observeAsState(initial = true)
+    val dbId by vm.dbId.observeAsState(initial = "")
+    val rawPassword by vm.rawPassword.observeAsState(initial = "")
     Column {
         if (isLocked) {
             val passwordVisible = remember { mutableStateOf(false) }
@@ -144,7 +129,7 @@ fun UnlockDialogContent(
                     Column(verticalArrangement = Arrangement.Center) {
                         OutlinedTextField(
                             value = dbId,
-                            onValueChange = onDbIdChange,
+                            onValueChange = { vm.onDbIdChange(it) },
                             label = { Text(text="Database Id") },
                             modifier = Modifier
                                 .padding(top = 16.dp)
@@ -153,7 +138,7 @@ fun UnlockDialogContent(
                         )
                         OutlinedTextField(
                             value = rawPassword,
-                            onValueChange = onRawPasswordChange,
+                            onValueChange = { vm.onRawPasswordChange(it) },
                             label = { Text(text="Password") },
                             visualTransformation = if (passwordVisible.value) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -168,19 +153,20 @@ fun UnlockDialogContent(
                                 }
                             },
                             modifier = Modifier
+                                .background(Color.Transparent)
                                 .padding(top = 16.dp)
                                 .sizeIn(minHeight = 1.dp)
-                                .background(Color.Transparent)
                         )
                     }
                 },
                 confirmButton = {
-                    Button(onClick = onLockChange) {
+                    Button(onClick = { vm.onLockChange() }) {
                         Text(
                             "Unlock",
                             style = TextStyle(
-                                color = MaterialTheme.colors.onPrimary,
                                 background = MaterialTheme.colors.primary,
+                                color = MaterialTheme.colors.onPrimary,
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight(FontStyle.FONT_WEIGHT_BOLD),
                             )
                         )
@@ -194,79 +180,72 @@ fun UnlockDialogContent(
 
 
 @Composable
-fun MainScreen(digiSafeViewModel: DigiSafeViewModel = viewModel()) {
-    val key by digiSafeViewModel.key.observeAsState(initial = "")
-    val value by digiSafeViewModel.value.observeAsState(initial = "")
-    MainContent(
-        key = key,
-        onKeyChange = { digiSafeViewModel.onKeyChange(it) },
-        value = value,
-        onValueChange = { digiSafeViewModel.onValueChange(it) },
-        onGet = { digiSafeViewModel.onGet() },
-        onSet = { digiSafeViewModel.onSet() },
-    )
-}
-
-@Composable
-fun MainContent(
-    key: String,
-    onKeyChange: (String) -> Unit,
-    value: String,
-    onValueChange: (String) -> Unit,
-    onGet: () -> Unit,
-    onSet: () -> Unit,
-) {
+fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
+    val key by vm.key.observeAsState(initial = "")
+    val value by vm.value.observeAsState(initial = "")
     Box(
         modifier = Modifier
-            .fillMaxSize()
             .background(color = MaterialTheme.colors.background)
+            .fillMaxSize()
     ) {
         Column(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            OutlinedTextField(
-                value = key,
-                onValueChange = onKeyChange,
-                label = { Text(text = "Key") },
-                modifier = Modifier
-                    .padding(top = 16.dp)
-                    .sizeIn(minHeight = 1.dp)
-                    .background(Color.Transparent)
-                    .fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                label = { Text(text = "Value") },
-                modifier = Modifier
-                    .padding(top = 16.dp)
-                    .sizeIn(minHeight = 400.dp)
-                    .background(Color.Transparent)
-                    .fillMaxWidth()
-            )
             Row (
                 horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Button(onClick = onGet) {
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { vm.onKeyChange(it) },
+                    label = { Text(text = "Key") },
+                    modifier = Modifier
+                        .background(Color.Transparent)
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                        .sizeIn(minHeight = 1.dp)
+                )
+            }
+            Row (
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { vm.onValueChange(it) },
+                    label = { Text(text = "Value") },
+                    modifier = Modifier
+                        .background(Color.Transparent)
+                        .fillMaxHeight(0.52F)
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 16.dp)
+                )
+            }
+            Row (
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Button(onClick = { vm.onGet() }) {
                     Text(
                         "Get",
                         style = TextStyle(
                             color = MaterialTheme.colors.onPrimary,
                             background = MaterialTheme.colors.primary,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight(FontStyle.FONT_WEIGHT_BOLD),
                         ),
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(48.dp))
-                Button(onClick = onSet) {
+                Button(onClick = { vm.onSet() }) {
                     Text(
                         "Set",
                         style = TextStyle(
                             color = MaterialTheme.colors.onPrimary,
                             background = MaterialTheme.colors.primary,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight(FontStyle.FONT_WEIGHT_BOLD),
                         ),
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -279,6 +258,7 @@ fun MainContent(
                         style = TextStyle(
                             color = MaterialTheme.colors.onPrimary,
                             background = MaterialTheme.colors.primary,
+                            fontSize = 18.sp,
                             fontWeight = FontWeight(FontStyle.FONT_WEIGHT_BOLD),
                         ),
                         modifier = Modifier.padding(horizontal = 10.dp)
