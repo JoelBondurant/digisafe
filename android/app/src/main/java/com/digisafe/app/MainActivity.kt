@@ -35,6 +35,9 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.digisafe.app.ui.theme.DigiSafeTheme
+import com.lambdapioneer.argon2kt.Argon2Kt
+import com.lambdapioneer.argon2kt.Argon2KtResult
+import com.lambdapioneer.argon2kt.Argon2Mode
 
 
 class MainActivity : ComponentActivity() {
@@ -57,40 +60,63 @@ fun MakeUI() {
 
 
 class DigiSafeViewModel : ViewModel() {
+
     private val _key = MutableLiveData("")
-    private val _value = MutableLiveData("")
-    private val _isLocked = MutableLiveData(true)
-    private val _dbId = MutableLiveData("")
-    private val _rawPassword = MutableLiveData("")
     val key = _key
+    private val _value = MutableLiveData("")
     val value = _value
+    private val _isLocked = MutableLiveData(true)
     val isLocked = _isLocked
+    private val _dbId = MutableLiveData("")
     val dbId = _dbId
+    private val _rawPassword = MutableLiveData("")
     val rawPassword = _rawPassword
+
     private val dbMap = HashMap<String, String>()
+    private var password = ""
+
     fun onKeyChange(newKey: String) {
         if (newKey.length <= 32) {
             _key.value = newKey
         }
     }
+
     fun onValueChange(newValue: String) {
         if (newValue.length <= 8000) {
             _value.value = newValue
         }
     }
-    fun onLockChange() {
-        _isLocked.value = false
+
+    fun onUnlock() {
+        val rawPasswordArray = _rawPassword.value?.toByteArray()
+        if (rawPasswordArray != null) {
+            val argon2Kt = Argon2Kt()
+            val hashResult: Argon2KtResult = argon2Kt.hash(
+                mode = Argon2Mode.ARGON2_ID,
+                password = rawPasswordArray,
+                salt = "digisafe".toByteArray(),
+                tCostInIterations = 2,
+                mCostInKibibyte = 1048576,
+            )
+            val passwordHash = hashResult.encodedOutputAsString()
+            password = passwordHash
+            dbMap["_password"] = passwordHash
+            _isLocked.value = false
+        }
     }
+
     fun onDbIdChange(newDbId: String) {
         if (newDbId.length <= 8) {
             _dbId.value = newDbId
         }
     }
+
     fun onRawPasswordChange(newRawPassword: String) {
         if (newRawPassword.length <= 64) {
             _rawPassword.value = newRawPassword
         }
     }
+
     fun onGet() {
         if (_key.value !== null) {
             val dbValue = dbMap[_key.value]
@@ -101,6 +127,7 @@ class DigiSafeViewModel : ViewModel() {
             }
         }
     }
+
     fun onSet() {
         val kv = _key.value
         val vv = _value.value
@@ -108,16 +135,20 @@ class DigiSafeViewModel : ViewModel() {
             dbMap[kv] = vv
         }
     }
+
 }
 
 
 @Composable
 fun UnlockDialog(vm: DigiSafeViewModel = viewModel()) {
+
     val isLocked by vm.isLocked.observeAsState(initial = true)
     val dbId by vm.dbId.observeAsState(initial = "")
     val rawPassword by vm.rawPassword.observeAsState(initial = "")
+
     Column {
         if (isLocked) {
+
             val passwordVisible = remember { mutableStateOf(false) }
 
             AlertDialog(
@@ -160,7 +191,7 @@ fun UnlockDialog(vm: DigiSafeViewModel = viewModel()) {
                     }
                 },
                 confirmButton = {
-                    Button(onClick = { vm.onLockChange() }) {
+                    Button(onClick = { vm.onUnlock() }) {
                         Text(
                             "Unlock",
                             style = TextStyle(
@@ -181,8 +212,10 @@ fun UnlockDialog(vm: DigiSafeViewModel = viewModel()) {
 
 @Composable
 fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
+
     val key by vm.key.observeAsState(initial = "")
     val value by vm.value.observeAsState(initial = "")
+
     Box(
         modifier = Modifier
             .background(color = MaterialTheme.colors.background)
