@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use chacha20poly1305::XChaCha20Poly1305;
+use chacha20poly1305::ChaCha20Poly1305;
 use chacha20poly1305::aead::{Aead, KeyInit};
 use sha1::Sha1;
 use sha3::Sha3_256;
@@ -53,9 +53,9 @@ impl AppDB {
         let pre_prefix = self.version.to_string() + &self.db_id + &self.revision; // 8 + 8 + 8 = 24
         assert_eq!(pre_prefix.len(), 24);
         let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &pre_prefix + &db_map_str).try_into().unwrap();
-        let nonce: [u8; 24] = hmac[..24].try_into().unwrap();
-        let prefix = pre_prefix + &base64::encode(&nonce); // 24 + 32 = 56
-        assert_eq!(prefix.len(), 56);
+        let nonce: [u8; 12] = hmac[..12].try_into().unwrap();
+        let prefix = pre_prefix + &base64::encode(&nonce); // 24 + 16 = 40
+        assert_eq!(prefix.len(), 40);
         let db_str_enc = prefix + &AppDB::encrypt(db_map_str, self.password, &nonce);
         self.db_enc = db_str_enc;
         self.lock();
@@ -175,14 +175,14 @@ impl AppDB {
         if self.db_enc == "" {
             "unlocked".into()
         } else {
-            let nonce: [u8; 24] = base64::decode(&self.db_enc[24..56]).unwrap().try_into().unwrap();
-            let db_map_enc = &self.db_enc[56..];
+            let nonce: [u8; 12] = base64::decode(&self.db_enc[24..40]).unwrap().try_into().unwrap();
+            let db_map_enc = &self.db_enc[40..];
             let db_map_str = AppDB::decrypt(db_map_enc.into(), self.password, &nonce);
             if db_map_str.is_some() {
                 let db_map_str = db_map_str.unwrap();
                 let pre_prefix = &self.db_enc[..24];
                 let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &pre_prefix + &db_map_str).try_into().unwrap();
-                let nonce_check: [u8; 24] = hmac[..24].try_into().unwrap();
+                let nonce_check: [u8; 12] = hmac[..12].try_into().unwrap();
                 assert_eq!(nonce, nonce_check);
                 let rdb: Result<HashMap<String, String>, _> = serde_json::from_str(&db_map_str);
                 if rdb.is_ok() {
@@ -219,14 +219,14 @@ impl AppDB {
         hash
     }
 
-    fn encrypt(raw_text: String, key: [u8; 32], nonce: &[u8; 24]) -> String {
-        let cipher = XChaCha20Poly1305::new(&key.into());
+    fn encrypt(raw_text: String, key: [u8; 32], nonce: &[u8; 12]) -> String {
+        let cipher = ChaCha20Poly1305::new(&key.into());
         let cipher_text = cipher.encrypt(nonce.into(), raw_text.as_ref()).unwrap();
         base64::encode(cipher_text)
     }
 
-    fn decrypt(enc_text: String, key: [u8; 32], nonce: &[u8; 24]) -> Option<String> {
-        let cipher = XChaCha20Poly1305::new(&key.into());
+    fn decrypt(enc_text: String, key: [u8; 32], nonce: &[u8; 12]) -> Option<String> {
+        let cipher = ChaCha20Poly1305::new(&key.into());
         let blob = base64::decode(enc_text).unwrap();
         let vplain_text = cipher.decrypt(nonce.into(), blob.as_ref());
         if vplain_text.is_ok() {
