@@ -38,7 +38,11 @@ import com.digisafe.app.ui.theme.DigiSafeTheme
 import com.lambdapioneer.argon2kt.Argon2Kt
 import com.lambdapioneer.argon2kt.Argon2KtResult
 import com.lambdapioneer.argon2kt.Argon2Mode
-
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +52,13 @@ class MainActivity : ComponentActivity() {
                 MakeUI()
             }
         }
+    }
+
+    init {
+        println("ChaCha20-Poly1305:")
+        println(Cipher.getInstance("ChaCha20-Poly1305"))
+        println("SHA-256")
+        println(MessageDigest.getInstance("SHA-256"))
     }
 }
 
@@ -89,6 +100,7 @@ class DigiSafeViewModel : ViewModel() {
 
     fun onUnlock() {
         val rawPasswordArray = _rawPassword.value?.toByteArray()
+        _rawPassword.value = ""
         if (rawPasswordArray != null) {
             val argon2Kt = Argon2Kt()
             val hashResult: Argon2KtResult = argon2Kt.hash(
