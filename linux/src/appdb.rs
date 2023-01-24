@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use chacha20poly1305::ChaCha20Poly1305;
 use chacha20poly1305::aead::{Aead, KeyInit};
 use sha1::Sha1;
-use sha3::Sha3_256;
+use sha2::Sha256;
 
 pub struct AppDB {
     db_enc: String,
@@ -40,7 +40,7 @@ impl AppDB {
     }
 
     pub fn set(&mut self, akey: String, aval: String) {
-        use sha3::Digest;
+        use sha2::Digest;
         self.unlock();
         if akey.len() > 0 {
             if aval.len() > 0 {
@@ -52,7 +52,9 @@ impl AppDB {
         let db_map_str = serde_json::to_string(&self.db_map).unwrap();
         let pre_prefix = self.version.to_string() + &self.db_id + &self.revision; // 8 + 8 + 8 = 24
         assert_eq!(pre_prefix.len(), 24);
-        let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &pre_prefix + &db_map_str).try_into().unwrap();
+        let hmac_arg = base64::encode(self.password) + &pre_prefix + &db_map_str;
+        let hmac_pre: [u8; 32] = Sha256::digest(hmac_arg).try_into().unwrap();
+        let hmac: [u8; 32] = Sha256::digest(hmac_pre).try_into().unwrap();
         let nonce: [u8; 12] = hmac[..12].try_into().unwrap();
         let prefix = pre_prefix + &base64::encode(&nonce); // 24 + 16 = 40
         assert_eq!(prefix.len(), 40);
@@ -171,7 +173,7 @@ impl AppDB {
     }
 
     fn unlock(&mut self) -> String {
-        use sha3::Digest;
+        use sha2::Digest;
         if self.db_enc == "" {
             "unlocked".into()
         } else {
@@ -181,7 +183,9 @@ impl AppDB {
             if db_map_str.is_some() {
                 let db_map_str = db_map_str.unwrap();
                 let pre_prefix = &self.db_enc[..24];
-                let hmac: [u8; 32] = Sha3_256::digest(base64::encode(self.password) + &pre_prefix + &db_map_str).try_into().unwrap();
+                let hmac_arg = base64::encode(self.password) + &pre_prefix + &db_map_str;
+                let hmac_pre: [u8; 32] = Sha256::digest(hmac_arg).try_into().unwrap();
+                let hmac: [u8; 32] = Sha256::digest(hmac_pre).try_into().unwrap();
                 let nonce_check: [u8; 12] = hmac[..12].try_into().unwrap();
                 assert_eq!(nonce, nonce_check);
                 let rdb: Result<HashMap<String, String>, _> = serde_json::from_str(&db_map_str);
