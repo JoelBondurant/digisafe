@@ -31,7 +31,7 @@ fn build_ui(app: &gtk::Application) {
         .max_length(64)
         .tooltip_text("Key Text")
         .build()));
-    
+
     let val_entry = Rc::new(RefCell::new(gtk::TextView::builder()
         .margin_top(10)
         .margin_bottom(10)

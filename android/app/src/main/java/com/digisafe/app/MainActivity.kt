@@ -45,6 +45,11 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        init {
+            System.loadLibrary("droid")
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -52,13 +57,6 @@ class MainActivity : ComponentActivity() {
                 MakeUI()
             }
         }
-    }
-
-    init {
-        println("ChaCha20-Poly1305:")
-        println(Cipher.getInstance("ChaCha20-Poly1305"))
-        println("SHA-256")
-        println(MessageDigest.getInstance("SHA-256"))
     }
 }
 
@@ -227,7 +225,7 @@ fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
 
     val key by vm.key.observeAsState(initial = "")
     val value by vm.value.observeAsState(initial = "")
-
+    
     Box(
         modifier = Modifier
             .background(color = MaterialTheme.colors.background)

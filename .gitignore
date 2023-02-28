@@ -3,6 +3,8 @@
 *.db
 
 linux/target
+android/droid/target
+android/app/src/main/jniLibs
 
 *.iml
 *.iws
