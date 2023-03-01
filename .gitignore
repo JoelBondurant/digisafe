@@ -1,22 +1,23 @@
+*.db
 */archive
 */old
-*.db
 
 linux/target
-android/droid/target
-android/app/src/main/jniLibs
 
-*.iml
-*.iws
-*.ipr
-*.cxx
-*.jar
 *.apk
 *.class
+*.cxx
+*.iml
+*.ipr
+*.iws
+*.jar
 android/.externalNativeBuild
 android/.gradle
 android/.idea
 android/app/build
+android/app/src/main/jniLibs
 android/build
 android/captures
+android/droid/target
 android/local.properties
+

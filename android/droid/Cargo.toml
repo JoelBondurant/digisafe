@@ -6,9 +6,18 @@ edition = "2021"
 [lib]
 crate-type = ["dylib"]
 
+[profile.release]
+codegen-units = 1
+debug = false
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
 [target.'cfg(target_os="android")'.dependencies]
 jni = { version = "0.20", default-features = false }
 
 [dependencies]
 chacha20poly1305 = "0.10.1"
 sha3 = "0.10.6"
+

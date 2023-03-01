@@ -225,7 +225,7 @@ fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
 
     val key by vm.key.observeAsState(initial = "")
     val value by vm.value.observeAsState(initial = "")
-    
+
     Box(
         modifier = Modifier
             .background(color = MaterialTheme.colors.background)
@@ -311,3 +311,4 @@ fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
         }
     }
 }
+

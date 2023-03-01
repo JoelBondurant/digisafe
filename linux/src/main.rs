@@ -219,3 +219,4 @@ async fn unlock_dialog<W: gtk::glib::IsA<gtk::Window>>(window: Rc<W>, db: Arc<Rw
         });
     dialog.run_future().await;
 }
+
