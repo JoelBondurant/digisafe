@@ -38,11 +38,12 @@ import com.digisafe.app.ui.theme.DigiSafeTheme
 import com.lambdapioneer.argon2kt.Argon2Kt
 import com.lambdapioneer.argon2kt.Argon2KtResult
 import com.lambdapioneer.argon2kt.Argon2Mode
-import java.security.MessageDigest
-import javax.crypto.Cipher
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
+import java.util.*
+import kotlin.collections.HashMap
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -52,9 +53,10 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val filesDir = this.applicationContext.filesDir
         setContent {
             DigiSafeTheme {
-                MakeUI()
+                MakeUI(filesDir)
             }
         }
     }
@@ -62,14 +64,15 @@ class MainActivity : ComponentActivity() {
 
 
 @Composable
-fun MakeUI() {
-    MainScreen()
-    UnlockDialog()
+fun MakeUI(filesDir: File?) {
+    MainScreen(filesDir)
+    UnlockDialog(filesDir)
 }
 
 
 class DigiSafeViewModel : ViewModel() {
 
+    var filesDir = File("/")
     private val _key = MutableLiveData("")
     val key = _key
     private val _value = MutableLiveData("")
@@ -110,6 +113,19 @@ class DigiSafeViewModel : ViewModel() {
             )
             val passwordHash = hashResult.encodedOutputAsString()
             password = passwordHash
+            val dbStr = Json.encodeToString(dbMap)
+            val fn = "/digisafe.db"
+            val fin = File(filesDir.path + fn)
+            if (fin.exists()) {
+                val fc = fin.readText()
+                println("Read from storage:")
+                println("filesDir.path: ${filesDir.path}")
+                println("fn: $fn")
+                val dbMap0 = Json.decodeFromString<HashMap<String, String>>(fc)
+                dbMap.putAll(dbMap0)
+            } else {
+                println("Failed to load database.")
+            }
             dbMap["_password"] = passwordHash
             _isLocked.value = false
         }
@@ -146,11 +162,24 @@ class DigiSafeViewModel : ViewModel() {
         }
     }
 
+    fun onSave() {
+        val dbStr = Json.encodeToString(dbMap)
+        val fn = "/digisafe.db"
+        val fout = File(filesDir.path + fn)
+        fout.writeText(dbStr)
+        println("Wrote from storage:")
+        println("filesDir.path: ${filesDir.path}")
+        println("fn: $fn")
+        println(dbStr)
+    }
+
 }
 
 
 @Composable
-fun UnlockDialog(vm: DigiSafeViewModel = viewModel()) {
+fun UnlockDialog(filesDir: File?, vm: DigiSafeViewModel = viewModel()) {
+
+    filesDir!!.also { vm.filesDir = it }
 
     val isLocked by vm.isLocked.observeAsState(initial = true)
     val dbId by vm.dbId.observeAsState(initial = "")
@@ -221,8 +250,9 @@ fun UnlockDialog(vm: DigiSafeViewModel = viewModel()) {
 
 
 @Composable
-fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
+fun MainScreen(filesDir: File?, vm: DigiSafeViewModel = viewModel()) {
 
+    filesDir!!.also { vm.filesDir = it }
     val key by vm.key.observeAsState(initial = "")
     val value by vm.value.observeAsState(initial = "")
 
@@ -295,7 +325,7 @@ fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
                     )
                 }
                 Spacer(modifier = Modifier.width(48.dp))
-                Button(onClick = {}) {
+                Button(onClick = { vm.onSave() }) {
                     Text(
                         "Save",
                         style = TextStyle(
