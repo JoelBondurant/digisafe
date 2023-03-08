@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.toLowerCase
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.MutableLiveData
@@ -38,6 +39,7 @@ import com.digisafe.app.ui.theme.DigiSafeTheme
 import com.lambdapioneer.argon2kt.Argon2Kt
 import com.lambdapioneer.argon2kt.Argon2KtResult
 import com.lambdapioneer.argon2kt.Argon2Mode
+import com.lambdapioneer.argon2kt.Argon2Version
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -53,7 +55,11 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val filesDir = this.applicationContext.filesDir
+        val filesDir = if (this.applicationContext.filesDir != null) {
+            this.applicationContext.filesDir!!
+        } else {
+            throw NullPointerException("Missing applicationContext.filesDir")
+        }
         setContent {
             DigiSafeTheme {
                 MakeUI(filesDir)
@@ -64,8 +70,8 @@ class MainActivity : ComponentActivity() {
 
 
 @Composable
-fun MakeUI(filesDir: File?) {
-    MainScreen(filesDir)
+fun MakeUI(filesDir: File) {
+    MainScreen()
     UnlockDialog(filesDir)
 }
 
@@ -85,7 +91,7 @@ class DigiSafeViewModel : ViewModel() {
     val rawPassword = _rawPassword
 
     private val dbMap = HashMap<String, String>()
-    private var password = ""
+    private var password = "".toByteArray()
 
     fun onKeyChange(newKey: String) {
         if (newKey.length <= 32) {
@@ -100,7 +106,7 @@ class DigiSafeViewModel : ViewModel() {
     }
 
     fun onUnlock() {
-        val rawPasswordArray = _rawPassword.value?.toByteArray()
+        val rawPasswordArray = sha3(_rawPassword.value!!.toByteArray())
         _rawPassword.value = ""
         if (rawPasswordArray != null) {
             val argon2Kt = Argon2Kt()
@@ -108,10 +114,13 @@ class DigiSafeViewModel : ViewModel() {
                 mode = Argon2Mode.ARGON2_ID,
                 password = rawPasswordArray,
                 salt = "digisafe".toByteArray(),
-                tCostInIterations = 2,
-                mCostInKibibyte = 1048576,
+                tCostInIterations = 4,
+                mCostInKibibyte = 65536,
+                parallelism = 4,
+                hashLengthInBytes = 32,
+                version = Argon2Version.V13,
             )
-            val passwordHash = hashResult.encodedOutputAsString()
+            val passwordHash = sha3(hashResult.rawHashAsByteArray())
             password = passwordHash
             val dbStr = Json.encodeToString(dbMap)
             val fn = "/digisafe.db"
@@ -126,7 +135,6 @@ class DigiSafeViewModel : ViewModel() {
             } else {
                 println("Failed to load database.")
             }
-            dbMap["_password"] = passwordHash
             _isLocked.value = false
         }
     }
@@ -143,7 +151,14 @@ class DigiSafeViewModel : ViewModel() {
         }
     }
 
+    fun normalizeKey() {
+        if (_key.value !== null) {
+            _key.value = key.value!!.trim().lowercase(Locale.getDefault())
+        }
+    }
+
     fun onGet() {
+        normalizeKey()
         if (_key.value !== null) {
             val dbValue = dbMap[_key.value]
             if (dbValue !== null) {
@@ -155,6 +170,7 @@ class DigiSafeViewModel : ViewModel() {
     }
 
     fun onSet() {
+        normalizeKey()
         val kv = _key.value
         val vv = _value.value
         if (kv !== null && vv !== null) {
@@ -177,10 +193,9 @@ class DigiSafeViewModel : ViewModel() {
 
 
 @Composable
-fun UnlockDialog(filesDir: File?, vm: DigiSafeViewModel = viewModel()) {
+fun UnlockDialog(filesDir: File, vm: DigiSafeViewModel = viewModel()) {
 
-    filesDir!!.also { vm.filesDir = it }
-
+    vm.filesDir = filesDir
     val isLocked by vm.isLocked.observeAsState(initial = true)
     val dbId by vm.dbId.observeAsState(initial = "")
     val rawPassword by vm.rawPassword.observeAsState(initial = "")
@@ -250,9 +265,8 @@ fun UnlockDialog(filesDir: File?, vm: DigiSafeViewModel = viewModel()) {
 
 
 @Composable
-fun MainScreen(filesDir: File?, vm: DigiSafeViewModel = viewModel()) {
+fun MainScreen(vm: DigiSafeViewModel = viewModel()) {
 
-    filesDir!!.also { vm.filesDir = it }
     val key by vm.key.observeAsState(initial = "")
     val value by vm.value.observeAsState(initial = "")
 

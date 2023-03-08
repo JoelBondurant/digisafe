@@ -1,6 +1,7 @@
 package com.digisafe.app
 
-fun ByteArray.toHexString() = "[" + joinToString(", ") { it.toUByte().toString() } + "]"
+fun ByteArray.toHexString() = joinToString("") { "%x".format(it) }
+fun ByteArray.toUByteString() = "[" + joinToString(", ") { it.toUByte().toString() } + "]"
 
 external fun decrypt(
     key: ByteArray,
