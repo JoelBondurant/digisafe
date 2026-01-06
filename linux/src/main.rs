@@ -1,6 +1,5 @@
-mod db;
-mod ui;
+use digisafe::ui;
 
 fn main() {
-	ui::run();
+	ui::gui::run();
 }
