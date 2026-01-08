@@ -1,22 +1,7 @@
 [package]
-name = "digisafe"
+name = "digisafe2"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-apache-avro = "0.21.0"
-argon2 = "0.5.3"
-base64ct = { version = "1.8.2", features = ["alloc"] }
-chacha20poly1305 = "0.10.1"
-gdk = { version = "0.5.4", package = "gdk4", features = ["v4_8"] }
-getrandom = "0.3.4"
-gtk = { version = "0.5.4", package = "gtk4", features = ["v4_8"] }
-hex = "0.4.3"
-lz4 = "1.28.1"
-reed-solomon = "0.2.1"
-reqwest = { version = "0.13.1", features = ["blocking"] }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.91"
-sha1 = "0.10.5"
-sha2 = "0.10.6"
-sha3 = "0.10.8"
+iced = { version = "0.14", features = ["tokio", "canvas", "debug"] }
