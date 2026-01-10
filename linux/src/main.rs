@@ -13,7 +13,16 @@ pub fn main() -> iced::Result {
 
 #[derive(Default)]
 struct Database {
-	_map: BTreeMap<String, String>,
+	btmap: BTreeMap<String, String>,
+}
+
+impl Database {
+	fn set(&mut self, key: String, value: String) {
+		self.btmap.insert(key, value);
+	}
+	fn get(&self, key: &str) -> Option<String> {
+		self.btmap.get(key).cloned()
+	}
 }
 
 #[derive(Default)]
@@ -21,7 +30,7 @@ struct State {
 	query: String,
 	value: text_editor::Content,
 	status: String,
-	_db: Database,
+	db: Database,
 }
 
 #[derive(Debug, Clone)]
@@ -67,7 +76,7 @@ fn my_button<'a, Message: Clone + 'a>(label: String, msg: Message) -> Element<'a
 					width: 1.0,
 					radius: 5.0.into(),
 				},
-				text_color: Color::from_rgb8(102, 109, 138),
+				text_color: Color::from_rgb8(162, 169, 198),
 				..base
 			},
 		}
@@ -93,20 +102,29 @@ impl State {
 				self.query = new_text;
 			}
 			Message::QuerySubmit => {
-				self.status = "Query submitted.".to_owned();
+				return Task::done(Message::Get);
 			}
-			Message::ValueAction(action) => {
-				self.status = format!("Modify entry: {}", self.query);
-				self.value.perform(action)
-			}
+			Message::ValueAction(action) => self.value.perform(action),
 			Message::Get => {
-				self.status = format!("Get entry: {}", self.query);
+				if let Some(found_value) = self.db.get(&self.query) {
+					self.status = format!("Retrieved entry: {}", self.query);
+					self.value = text_editor::Content::with_text(&found_value);
+				} else {
+					self.status = format!("No entry found: {}", self.query);
+					self.value = text_editor::Content::new();
+				}
 			}
 			Message::Set => {
-				self.status = format!("Set entry: {}", self.query);
+				let content_string = self.value.text();
+				if !self.query.is_empty() {
+					self.db.set(self.query.clone(), content_string);
+					self.status = format!("Stored entry: {}", self.query);
+				} else {
+					self.status = "Error: Query was empty".to_owned();
+				}
 			}
 			Message::Save => {
-				self.status = "Save database.".to_owned();
+				self.status = "Save database not yet implemented.".to_owned();
 			}
 		}
 		Task::none()
