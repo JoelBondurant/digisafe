@@ -2,8 +2,10 @@ use crate::storage::Database;
 use iced::{
 	border, font,
 	theme::{Palette, Theme},
-	widget::{button, center, column, container, row, space, text, text_editor, text_input},
-	Alignment, Background, Center, Color, Element, Fill, Font, Task,
+	widget::{
+		button, center, column, container, mouse_area, row, space, text, text_editor, text_input,
+	},
+	window, Alignment, Background, Center, Color, Element, Fill, Font, Task,
 };
 
 #[derive(Default)]
@@ -22,6 +24,8 @@ enum Message {
 	Get,
 	Set,
 	Save,
+	CloseWindow,
+	DragWindow,
 }
 
 pub type Result = iced::Result;
@@ -30,6 +34,11 @@ pub fn run() -> Result {
 	iced::application(State::new, State::update, State::view)
 		.theme(State::theme)
 		.title(State::title)
+		.window(iced::window::Settings {
+			decorations: false,
+			transparent: false,
+			..Default::default()
+		})
 		.run()
 }
 
@@ -116,11 +125,63 @@ impl State {
 			Message::Save => {
 				self.status = "Save database not yet implemented.".to_owned();
 			}
+			Message::CloseWindow => {
+				return window::latest().and_then(window::close);
+			}
+			Message::DragWindow => {
+				return window::latest().and_then(window::drag);
+			}
 		}
 		Task::none()
 	}
 
 	fn view(&self) -> Element<'_, Message> {
+		let title_bar = container(
+			row![
+				mouse_area(container(row![
+					space::horizontal(),
+					text("DigiSafe")
+						.size(14)
+						.font(Font {
+							weight: font::Weight::Bold,
+							..Default::default()
+						})
+						.color(Color::from_rgb8(80, 200, 80)),
+					space::horizontal()
+				]))
+				.on_press(Message::DragWindow),
+				button(text("✕").size(16).align_y(Center).align_x(Center))
+					.width(40)
+					.style(|_theme: &Theme, status: button::Status| {
+						match status {
+							button::Status::Hovered => button::Style {
+								background: Some(Background::Color(Color::from_rgb8(200, 40, 40))),
+								text_color: Color::WHITE,
+								..button::Style::default()
+							},
+							_ => button::Style {
+								background: Some(Background::Color(Color::TRANSPARENT)),
+								text_color: Color::from_rgb8(150, 150, 150),
+								..button::Style::default()
+							},
+						}
+					})
+					.on_press(Message::CloseWindow),
+			]
+			.padding(8)
+			.align_y(iced::Center),
+		)
+		.width(Fill)
+		.style(|_theme| container::Style {
+			background: Some(Color::from_rgb8(10, 10, 10).into()),
+			border: border::Border {
+				color: Color::from_rgb8(40, 240, 40),
+				width: 0.0,
+				radius: 0.0.into(),
+			},
+			..Default::default()
+		});
+
 		let query_bar = text_input("Search passwords...", &self.query)
 			.on_input(Message::QueryInput)
 			.on_submit(Message::QuerySubmit)
@@ -169,6 +230,7 @@ impl State {
 
 		let value_editor = text_editor(&self.value)
 			.id("value")
+			.size(18)
 			.height(Fill)
 			.on_action(Message::ValueAction)
 			.wrapping(text::Wrapping::Word)
@@ -237,7 +299,7 @@ impl State {
 		.padding(1)
 		.width(Fill);
 
-		column![header, main_content, button_bar, status_bar].into()
+		column![title_bar, header, main_content, button_bar, status_bar].into()
 	}
 
 	fn title(&self) -> String {
