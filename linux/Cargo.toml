@@ -1,10 +1,15 @@
 [package]
 name = "digisafe2"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
-iced = { version = "0.14", features = ["wgpu", "wayland", "tokio", "highlighter"] }
+iced = { version = "0.14", default-features = false, features = ["canvas", "tiny-skia", "tokio", "wayland"] }
+memsecurity = "3.5.2"
+rustix = "1.1.3"
+secmem-alloc = "0.4.0"
+tiny-skia = "0.11.4"
+zeroize = "1.8.2"
 
 [profile.release]
 opt-level = 3

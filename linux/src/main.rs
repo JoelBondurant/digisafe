@@ -1,28 +1,16 @@
+mod security;
+mod storage;
+
 use iced::widget::{button, center, column, container, row, space, text, text_editor, text_input};
-use iced::{
-	border, font, Alignment, Background, Center, Color, Element, Fill, Font, Length, Task, Theme,
-};
-use std::collections::BTreeMap;
+use iced::{border, font, Alignment, Background, Center, Color, Element, Fill, Font, Task, Theme};
+use storage::Database;
 
 pub fn main() -> iced::Result {
+	security::preflight();
 	iced::application(State::new, State::update, State::view)
 		.theme(State::theme)
 		.title(State::title)
 		.run()
-}
-
-#[derive(Default)]
-struct Database {
-	btmap: BTreeMap<String, String>,
-}
-
-impl Database {
-	fn set(&mut self, key: String, value: String) {
-		self.btmap.insert(key, value);
-	}
-	fn get(&self, key: &str) -> Option<String> {
-		self.btmap.get(key).cloned()
-	}
 }
 
 #[derive(Default)]
@@ -47,7 +35,7 @@ fn my_button<'a, Message: Clone + 'a>(label: String, msg: Message) -> Element<'a
 	button(
 		text(label)
 			.size(20)
-			.width(Length::Fill)
+			.width(Fill)
 			.align_x(Alignment::Center)
 			.align_y(Alignment::Center)
 			.font(Font {
@@ -139,7 +127,7 @@ impl State {
 
 		let header = container(query_bar)
 			.padding(1)
-			.width(Length::Fill)
+			.width(Fill)
 			.style(|_theme| container::Style {
 				background: Some(Color::from_rgb8(40, 240, 40).into()),
 				..Default::default()
@@ -153,7 +141,7 @@ impl State {
 
 		let main_content = container(center(column![value_editor].spacing(20)))
 			.padding(1)
-			.width(Length::Fill);
+			.width(Fill);
 
 		let button_bar = row![
 			space::horizontal(),
@@ -178,7 +166,7 @@ impl State {
 		))
 		.height(30)
 		.padding(1)
-		.width(Length::Fill);
+		.width(Fill);
 
 		column![header, main_content, button_bar, status_bar].into()
 	}
