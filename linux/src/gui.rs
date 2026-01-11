@@ -1,6 +1,10 @@
 use crate::storage::Database;
-use iced::widget::{button, center, column, container, row, space, text, text_editor, text_input};
-use iced::{border, font, Alignment, Background, Center, Color, Element, Fill, Font, Task, Theme};
+use iced::{
+	border, font,
+	theme::{Palette, Theme},
+	widget::{button, center, column, container, row, space, text, text_editor, text_input},
+	Alignment, Background, Center, Color, Element, Fill, Font, Task,
+};
 
 #[derive(Default)]
 struct State {
@@ -46,23 +50,23 @@ fn my_button<'a, Message: Clone + 'a>(label: String, msg: Message) -> Element<'a
 		let base = button::primary(theme, status);
 		match status {
 			button::Status::Hovered => button::Style {
-				background: Some(Background::Color(Color::from_rgb8(52, 54, 76))),
+				background: Some(Background::Color(Color::from_rgb8(16, 16, 32))),
 				border: border::Border {
-					color: Color::from_rgb8(40, 240, 40),
+					color: Color::from_rgb8(110, 10, 240),
 					width: 2.0,
 					radius: 5.0.into(),
 				},
-				text_color: Color::from_rgb8(200, 255, 200),
+				text_color: Color::from_rgb8(20, 250, 20),
 				..base
 			},
 			_ => button::Style {
-				background: Some(Background::Color(Color::from_rgb8(26, 27, 38))),
+				background: Some(Background::Color(Color::from_rgb8(8, 8, 16))),
 				border: border::Border {
-					color: Color::from_rgb8(10, 80, 10),
+					color: Color::from_rgb8(60, 8, 100),
 					width: 1.0,
 					radius: 5.0.into(),
 				},
-				text_color: Color::from_rgb8(162, 169, 198),
+				text_color: Color::from_rgb8(200, 180, 200),
 				..base
 			},
 		}
@@ -79,7 +83,7 @@ impl State {
 	}
 
 	fn theme(_state: &State) -> Theme {
-		Theme::TokyoNight
+		black_hole_theme()
 	}
 
 	fn update(&mut self, message: Message) -> Task<Message> {
@@ -121,24 +125,91 @@ impl State {
 			.on_input(Message::QueryInput)
 			.on_submit(Message::QuerySubmit)
 			.padding(10)
-			.size(18);
-
-		let header = container(query_bar)
-			.padding(1)
-			.width(Fill)
-			.style(|_theme| container::Style {
-				background: Some(Color::from_rgb8(40, 240, 40).into()),
-				..Default::default()
+			.size(18)
+			.style(|_theme: &Theme, status: text_input::Status| match status {
+				text_input::Status::Focused { .. } => text_input::Style {
+					background: Background::Color(Color::from_rgb8(16, 16, 32)),
+					border: border::Border {
+						color: Color::from_rgb8(110, 10, 240),
+						width: 2.0,
+						radius: 5.0.into(),
+					},
+					icon: Color::from_rgb8(200, 180, 200),
+					placeholder: Color::from_rgb8(100, 90, 100),
+					value: Color::from_rgb8(20, 250, 20),
+					selection: Color::from_rgb8(110, 10, 240),
+				},
+				text_input::Status::Hovered => text_input::Style {
+					background: Background::Color(Color::from_rgb8(12, 12, 24)),
+					border: border::Border {
+						color: Color::from_rgb8(80, 8, 140),
+						width: 1.5,
+						radius: 5.0.into(),
+					},
+					icon: Color::from_rgb8(200, 180, 200),
+					placeholder: Color::from_rgb8(80, 70, 80),
+					value: Color::from_rgb8(200, 180, 200),
+					selection: Color::from_rgb8(110, 10, 240),
+				},
+				_ => text_input::Style {
+					background: Background::Color(Color::from_rgb8(8, 8, 16)),
+					border: border::Border {
+						color: Color::from_rgb8(60, 8, 100),
+						width: 1.0,
+						radius: 5.0.into(),
+					},
+					icon: Color::from_rgb8(200, 180, 200),
+					placeholder: Color::from_rgb8(80, 70, 80),
+					value: Color::from_rgb8(200, 180, 200),
+					selection: Color::from_rgb8(110, 10, 240),
+				},
 			});
+
+		let header = container(query_bar).padding(4).width(Fill);
 
 		let value_editor = text_editor(&self.value)
 			.id("value")
 			.height(Fill)
 			.on_action(Message::ValueAction)
-			.wrapping(text::Wrapping::Word);
+			.wrapping(text::Wrapping::Word)
+			.style(|_theme: &Theme, status: text_editor::Status| match status {
+				text_editor::Status::Focused { .. } => text_editor::Style {
+					background: Background::Color(Color::from_rgb8(16, 16, 32)),
+					border: border::Border {
+						color: Color::from_rgb8(110, 10, 240),
+						width: 2.0,
+						radius: 5.0.into(),
+					},
+					placeholder: Color::from_rgb8(100, 90, 100),
+					value: Color::from_rgb8(20, 250, 20),
+					selection: Color::from_rgb8(110, 10, 240),
+				},
+				text_editor::Status::Hovered => text_editor::Style {
+					background: Background::Color(Color::from_rgb8(12, 12, 24)),
+					border: border::Border {
+						color: Color::from_rgb8(80, 8, 140),
+						width: 1.5,
+						radius: 5.0.into(),
+					},
+					placeholder: Color::from_rgb8(80, 70, 80),
+					value: Color::from_rgb8(200, 180, 200),
+					selection: Color::from_rgb8(110, 10, 240),
+				},
+				_ => text_editor::Style {
+					background: Background::Color(Color::from_rgb8(8, 8, 16)),
+					border: border::Border {
+						color: Color::from_rgb8(60, 8, 100),
+						width: 1.0,
+						radius: 5.0.into(),
+					},
+					placeholder: Color::from_rgb8(80, 70, 80),
+					value: Color::from_rgb8(200, 180, 200),
+					selection: Color::from_rgb8(110, 10, 240),
+				},
+			});
 
 		let main_content = container(center(column![value_editor].spacing(20)))
-			.padding(1)
+			.padding(4)
 			.width(Fill);
 
 		let button_bar = row![
@@ -172,4 +243,18 @@ impl State {
 	fn title(&self) -> String {
 		State::NAME.to_string()
 	}
+}
+
+fn black_hole_theme() -> Theme {
+	Theme::custom(
+		"BlackHole".to_string(),
+		Palette {
+			background: Color::from_rgb8(1, 1, 1),
+			danger: Color::from_rgb8(200, 40, 40),
+			primary: Color::from_rgb8(100, 100, 255),
+			success: Color::from_rgb8(40, 200, 40),
+			text: Color::from_rgb8(230, 230, 230),
+			warning: Color::from_rgb8(200, 80, 80),
+		},
+	)
 }
