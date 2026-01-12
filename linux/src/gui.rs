@@ -12,13 +12,6 @@ use std::{
 	mem,
 	sync::{Arc, RwLock},
 };
-//use std::sync::OnceLock;
-
-//static DB_INPUT_ID: OnceLock<text_input::Id> = OnceLock::new();
-
-//fn get_db_input_id() -> text_input::Id {
-//	DB_INPUT_ID.get_or_init(text_input::Id::unique).clone()
-//}
 
 enum AppState {
 	Locked {
@@ -63,7 +56,7 @@ pub fn run() -> Result {
 		.theme(State::theme)
 		.title(State::title)
 		.window(iced::window::Settings {
-			size: Size::new(400.0, 400.0),
+			size: Size::new(1000.0, 800.0),
 			position: window::Position::Centered,
 			decorations: false,
 			transparent: false,
@@ -120,7 +113,7 @@ impl State {
 	pub fn new() -> Self {
 		Self {
 			app_state: AppState::Locked {
-				db_name: "default.db".into(),
+				db_name: "main".into(),
 				password: "".into(),
 				is_processing: false,
 			},
@@ -205,6 +198,14 @@ impl State {
 					};
 				}
 				Message::QuerySubmit => {
+					self.app_state = AppState::Unlocked {
+						db_name: db_name.clone(),
+						master_key,
+						query: query.clone(),
+						value: value.clone(),
+						status: status.clone(),
+						db: db.clone(),
+					};
 					return Task::done(Message::Get);
 				}
 				Message::ValueAction(action) => {
@@ -279,6 +280,14 @@ impl State {
 					return window::latest().and_then(window::close);
 				}
 				Message::DragWindow => {
+					self.app_state = AppState::Unlocked {
+						db_name: db_name.clone(),
+						master_key,
+						query: query.clone(),
+						value: value.clone(),
+						status: status.clone(),
+						db: db.clone(),
+					};
 					return window::latest().and_then(window::drag);
 				}
 				_ => {}
@@ -293,24 +302,26 @@ impl State {
 				db_name,
 				password,
 				is_processing,
-			} => container(
+			} => container(center(
 				column![
-					text("Unlock Database").size(30),
-					text_input("Database Name", db_name).on_input(Message::DbNameChanged),
-					text_input("Master Password", password)
+					text("Unlock Database").size(16),
+					text_input("Database Name: ", db_name).on_input(Message::DbNameChanged),
+					text_input("Master Password: ", password)
 						.on_input(Message::PasswordChanged)
 						.secure(true)
 						.on_submit(Message::AttemptUnlock),
-					button(if *is_processing {
-						"Hashing..."
-					} else {
-						"Unlock"
-					})
-					.on_press(Message::AttemptUnlock)
+					my_button(
+						if *is_processing {
+							"Unlocking".into()
+						} else {
+							"Unlock".into()
+						},
+						Message::AttemptUnlock
+					)
 				]
 				.spacing(20)
-				.max_width(400),
-			)
+				.width(600),
+			))
 			.width(Fill)
 			.height(Fill)
 			.into(),
