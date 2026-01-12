@@ -134,7 +134,7 @@ mod tests {
 		db.set("key2".to_string(), "value2".to_string());
 		assert_eq!(db.len(), 2);
 		db.set("key1".to_string(), "updated".to_string());
-		assert_eq!(db.len(), 2); // Overwrite doesn't increase len
+		assert_eq!(db.len(), 2);
 		db.remove("key1");
 		assert_eq!(db.len(), 1);
 		db.remove("key2");

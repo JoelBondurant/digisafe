@@ -106,10 +106,10 @@ impl State {
 			Message::ValueAction(action) => self.value.perform(action),
 			Message::Get => {
 				if let Some(found_value) = self.db.get(&self.query) {
-					self.status = format!("Retrieved entry: {}", self.query);
+					self.status = "Entry retrieved.".to_string();
 					self.value = text_editor::Content::with_text(&found_value);
 				} else {
-					self.status = format!("No entry found: {}", self.query);
+					self.status = "Entry not retrieved.".to_string();
 					self.value = text_editor::Content::new();
 				}
 			}
@@ -117,7 +117,7 @@ impl State {
 				let content_string = self.value.text();
 				if !self.query.is_empty() {
 					self.db.set(self.query.clone(), content_string);
-					self.status = format!("Stored entry: {}", self.query);
+					self.status = "Entry set.".to_string();
 				} else {
 					self.status = "Error: Query was empty".to_owned();
 				}
@@ -288,10 +288,10 @@ impl State {
 
 		let status_bar = container(center(
 			row![
-				text(">"),
+				text("> "),
 				text(self.status.clone()),
 				space::horizontal(),
-				text("<")
+				text(" <")
 			]
 			.spacing(1),
 		))
