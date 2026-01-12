@@ -45,7 +45,7 @@ pub fn run() -> Result {
 fn my_button<'a, Message: Clone + 'a>(label: String, msg: Message) -> Element<'a, Message> {
 	button(
 		text(label)
-			.size(20)
+			.size(18)
 			.width(Fill)
 			.align_x(Alignment::Center)
 			.align_y(Alignment::Center)
@@ -54,7 +54,7 @@ fn my_button<'a, Message: Clone + 'a>(label: String, msg: Message) -> Element<'a
 				..Default::default()
 			}),
 	)
-	.width(80)
+	.width(100)
 	.style(|theme: &Theme, status: button::Status| {
 		let base = button::primary(theme, status);
 		match status {
@@ -150,46 +150,57 @@ impl State {
 					space::horizontal()
 				]))
 				.on_press(Message::DragWindow),
-				button(text("✕").size(16).align_y(Center).align_x(Center))
-					.width(40)
-					.style(|_theme: &Theme, status: button::Status| {
-						match status {
-							button::Status::Hovered => button::Style {
-								background: Some(Background::Color(Color::from_rgb8(200, 40, 40))),
-								text_color: Color::WHITE,
-								..button::Style::default()
-							},
-							_ => button::Style {
-								background: Some(Background::Color(Color::TRANSPARENT)),
-								text_color: Color::from_rgb8(150, 150, 150),
-								..button::Style::default()
-							},
-						}
-					})
-					.on_press(Message::CloseWindow),
+				button(
+					text("✕")
+						.font(Font {
+							weight: font::Weight::Bold,
+							..Default::default()
+						})
+						.size(18)
+						.align_y(Center)
+						.align_x(Center)
+				)
+				.width(42)
+				.height(36)
+				.style(|_theme: &Theme, status: button::Status| {
+					match status {
+						button::Status::Hovered => button::Style {
+							background: Some(Background::Color(Color::from_rgb8(150, 4, 250))),
+							text_color: Color::from_rgb8(100, 250, 100),
+							..button::Style::default()
+						},
+						_ => button::Style {
+							background: Some(Background::Color(Color::TRANSPARENT)),
+							text_color: Color::from_rgb8(120, 120, 120),
+							..button::Style::default()
+						},
+					}
+				})
+				.on_press(Message::CloseWindow),
 			]
-			.padding(8)
+			.padding(0)
 			.align_y(iced::Center),
 		)
 		.width(Fill)
+		.height(36)
 		.style(|_theme| container::Style {
-			background: Some(Color::from_rgb8(10, 10, 10).into()),
+			background: Some(Color::from_rgb8(4, 4, 4).into()),
 			border: border::Border {
-				color: Color::from_rgb8(40, 240, 40),
-				width: 0.0,
+				color: Color::from_rgb8(12, 32, 12),
+				width: 2.0,
 				radius: 0.0.into(),
 			},
 			..Default::default()
 		});
 
-		let query_bar = text_input("Search passwords...", &self.query)
+		let query_bar = text_input("search...", &self.query)
 			.on_input(Message::QueryInput)
 			.on_submit(Message::QuerySubmit)
 			.padding(10)
 			.size(18)
 			.style(|_theme: &Theme, status: text_input::Status| match status {
 				text_input::Status::Focused { .. } => text_input::Style {
-					background: Background::Color(Color::from_rgb8(16, 16, 32)),
+					background: Background::Color(Color::from_rgb8(8, 4, 10)),
 					border: border::Border {
 						color: Color::from_rgb8(110, 10, 240),
 						width: 2.0,
@@ -201,7 +212,7 @@ impl State {
 					selection: Color::from_rgb8(110, 10, 240),
 				},
 				text_input::Status::Hovered => text_input::Style {
-					background: Background::Color(Color::from_rgb8(12, 12, 24)),
+					background: Background::Color(Color::from_rgb8(10, 8, 16)),
 					border: border::Border {
 						color: Color::from_rgb8(80, 8, 140),
 						width: 1.5,
@@ -213,7 +224,7 @@ impl State {
 					selection: Color::from_rgb8(110, 10, 240),
 				},
 				_ => text_input::Style {
-					background: Background::Color(Color::from_rgb8(8, 8, 16)),
+					background: Background::Color(Color::from_rgb8(4, 4, 8)),
 					border: border::Border {
 						color: Color::from_rgb8(60, 8, 100),
 						width: 1.0,
@@ -236,7 +247,7 @@ impl State {
 			.wrapping(text::Wrapping::Word)
 			.style(|_theme: &Theme, status: text_editor::Status| match status {
 				text_editor::Status::Focused { .. } => text_editor::Style {
-					background: Background::Color(Color::from_rgb8(16, 16, 32)),
+					background: Background::Color(Color::from_rgb8(8, 4, 10)),
 					border: border::Border {
 						color: Color::from_rgb8(110, 10, 240),
 						width: 2.0,
@@ -247,7 +258,7 @@ impl State {
 					selection: Color::from_rgb8(110, 10, 240),
 				},
 				text_editor::Status::Hovered => text_editor::Style {
-					background: Background::Color(Color::from_rgb8(12, 12, 24)),
+					background: Background::Color(Color::from_rgb8(10, 8, 16)),
 					border: border::Border {
 						color: Color::from_rgb8(80, 8, 140),
 						width: 1.5,
@@ -258,7 +269,7 @@ impl State {
 					selection: Color::from_rgb8(110, 10, 240),
 				},
 				_ => text_editor::Style {
-					background: Background::Color(Color::from_rgb8(8, 8, 16)),
+					background: Background::Color(Color::from_rgb8(4, 4, 8)),
 					border: border::Border {
 						color: Color::from_rgb8(60, 8, 100),
 						width: 1.0,
@@ -283,7 +294,7 @@ impl State {
 			my_button("Save".into(), Message::Save),
 			space::horizontal(),
 		]
-		.padding(10)
+		.padding(16)
 		.align_y(Center);
 
 		let status_bar = container(center(
