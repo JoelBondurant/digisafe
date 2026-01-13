@@ -177,6 +177,17 @@ impl State {
 						is_processing,
 					};
 				}
+				Message::CloseWindow => {
+					return window::latest().and_then(window::close);
+				}
+				Message::DragWindow => {
+					self.app_state = AppState::Locked {
+						db_name: db_name.clone(),
+						password: password.clone(),
+						is_processing,
+					};
+					return window::latest().and_then(window::drag);
+				}
 				_ => {}
 			},
 			AppState::Unlocked {
@@ -302,29 +313,91 @@ impl State {
 				db_name,
 				password,
 				is_processing,
-			} => container(center(
-				column![
-					text("Unlock Database").size(16),
-					text_input("Database Name: ", db_name).on_input(Message::DbNameChanged),
-					text_input("Master Password: ", password)
-						.on_input(Message::PasswordChanged)
-						.secure(true)
-						.on_submit(Message::AttemptUnlock),
-					my_button(
-						if *is_processing {
-							"Unlocking".into()
-						} else {
-							"Unlock".into()
-						},
-						Message::AttemptUnlock
-					)
-				]
-				.spacing(20)
-				.width(600),
-			))
-			.width(Fill)
-			.height(Fill)
-			.into(),
+			} => {
+				let title_bar = container(
+					row![
+						mouse_area(container(row![
+							space::horizontal(),
+							text("DigiSafe")
+								.size(14)
+								.font(Font {
+									weight: font::Weight::Bold,
+									..Default::default()
+								})
+								.color(Color::from_rgb8(80, 200, 80)),
+							space::horizontal()
+						]))
+						.on_press(Message::DragWindow),
+						button(
+							text("✕")
+								.font(Font {
+									weight: font::Weight::Bold,
+									..Default::default()
+								})
+								.size(18)
+								.align_y(Center)
+								.align_x(Center)
+						)
+						.width(42)
+						.height(36)
+						.style(|_theme: &Theme, status: button::Status| {
+							match status {
+								button::Status::Hovered => button::Style {
+									background: Some(Background::Color(Color::from_rgb8(
+										150, 4, 250,
+									))),
+									text_color: Color::from_rgb8(100, 250, 100),
+									..button::Style::default()
+								},
+								_ => button::Style {
+									background: Some(Background::Color(Color::TRANSPARENT)),
+									text_color: Color::from_rgb8(120, 120, 120),
+									..button::Style::default()
+								},
+							}
+						})
+						.on_press(Message::CloseWindow),
+					]
+					.padding(0)
+					.align_y(iced::Center),
+				)
+				.width(Fill)
+				.height(36)
+				.style(|_theme| container::Style {
+					background: Some(Color::from_rgb8(4, 4, 4).into()),
+					border: border::Border {
+						color: Color::from_rgb8(12, 32, 12),
+						width: 2.0,
+						radius: 0.0.into(),
+					},
+					..Default::default()
+				});
+
+				let unlock_panel = container(center(
+					column![
+						text("Unlock Database").size(16),
+						text_input("Database Name: ", db_name).on_input(Message::DbNameChanged),
+						text_input("Master Password: ", password)
+							.on_input(Message::PasswordChanged)
+							.secure(true)
+							.on_submit(Message::AttemptUnlock),
+						my_button(
+							if *is_processing {
+								"Unlocking".into()
+							} else {
+								"Unlock".into()
+							},
+							Message::AttemptUnlock
+						)
+					]
+					.spacing(20)
+					.width(600),
+				))
+				.width(Fill)
+				.height(Fill);
+
+				column![title_bar, unlock_panel].into()
+			}
 			AppState::Unlocked {
 				db_name: _,
 				master_key: _,
