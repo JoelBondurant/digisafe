@@ -6,14 +6,11 @@ use crate::storage::volatile::Database;
 use iced::{
 	border,
 	theme::Theme,
-	widget::{center, column, container, row, space, text, text_editor, text_input},
+	widget::{center, column, container, row, space, text, text_editor},
 	window, Background, Center, Color, Element, Fill, Size, Task,
 };
 use messages::Message;
-use std::{
-	mem,
-	sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 enum AppState {
 	Locked {
@@ -22,8 +19,8 @@ enum AppState {
 		is_processing: bool,
 	},
 	Unlocked {
-		db_name: String,
-		master_key: [u8; 32],
+		//db_name: String,
+		//master_key: [u8; 32],
 		query: String,
 		value: text_editor::Content,
 		status: String,
@@ -65,25 +62,14 @@ impl State {
 	}
 
 	fn update(&mut self, message: Message) -> Task<Message> {
-		match mem::replace(
-			&mut self.app_state,
-			AppState::Locked {
-				db_name: "".into(),
-				password: "".into(),
-				is_processing: false,
-			},
-		) {
+		match &mut self.app_state {
 			AppState::Locked {
 				db_name,
 				password,
 				is_processing,
 			} => match message {
 				Message::AttemptUnlock => {
-					self.app_state = AppState::Locked {
-						db_name: db_name.clone(),
-						password: password.clone(),
-						is_processing: true,
-					};
+					*is_processing = true;
 					let pw = password.clone();
 					return Task::perform(
 						async move {
@@ -93,10 +79,8 @@ impl State {
 						Message::UnlockResult,
 					);
 				}
-				Message::UnlockResult(master_key) => {
+				Message::UnlockResult(_master_key) => {
 					self.app_state = AppState::Unlocked {
-						db_name: db_name.clone(),
-						master_key,
 						query: "".into(),
 						value: text_editor::Content::new(),
 						status: "Unlocked".into(),
@@ -104,141 +88,60 @@ impl State {
 					};
 				}
 				Message::DbNameChanged(new_db_name) => {
-					self.app_state = AppState::Locked {
-						db_name: new_db_name,
-						password: password.clone(),
-						is_processing,
-					};
+					*db_name = new_db_name;
 				}
 				Message::PasswordChanged(new_password) => {
-					self.app_state = AppState::Locked {
-						db_name: db_name.clone(),
-						password: new_password,
-						is_processing,
-					};
+					*password = new_password;
 				}
 				Message::CloseWindow => {
 					return window::latest().and_then(window::close);
 				}
 				Message::DragWindow => {
-					self.app_state = AppState::Locked {
-						db_name: db_name.clone(),
-						password: password.clone(),
-						is_processing,
-					};
 					return window::latest().and_then(window::drag);
 				}
 				_ => {}
 			},
 			AppState::Unlocked {
-				db_name,
-				master_key,
 				query,
 				value,
 				status,
 				db,
 			} => match message {
 				Message::QueryInput(new_text) => {
-					self.app_state = AppState::Unlocked {
-						db_name: db_name.clone(),
-						master_key,
-						query: new_text,
-						value: value.clone(),
-						status: status.clone(),
-						db: db.clone(),
-					};
+					*query = new_text;
 				}
 				Message::QuerySubmit => {
-					self.app_state = AppState::Unlocked {
-						db_name: db_name.clone(),
-						master_key,
-						query: query.clone(),
-						value: value.clone(),
-						status: status.clone(),
-						db: db.clone(),
-					};
 					return Task::done(Message::Get);
 				}
 				Message::ValueAction(action) => {
-					let mut new_value = value.clone();
-					new_value.perform(action);
-					self.app_state = AppState::Unlocked {
-						db_name: db_name.clone(),
-						master_key,
-						query: query.clone(),
-						value: new_value,
-						status: status.clone(),
-						db: db.clone(),
-					};
+					value.perform(action);
 				}
 				Message::Get => {
-					let aval = db.read().unwrap().get(&query);
+					let aval = db.read().unwrap().get(query);
 					if let Some(found_value) = aval {
-						self.app_state = AppState::Unlocked {
-							db_name: db_name.clone(),
-							master_key,
-							query: query.clone(),
-							value: text_editor::Content::with_text(&found_value),
-							status: "Entry retrieved.".to_string(),
-							db: db.clone(),
-						};
+						*status = "Entry retrieved.".to_string();
+						*value = text_editor::Content::with_text(&found_value);
 					} else {
-						self.app_state = AppState::Unlocked {
-							db_name: db_name.clone(),
-							master_key,
-							query: query.clone(),
-							value: text_editor::Content::new(),
-							status: "Entry not retrieved.".to_string(),
-							db: db.clone(),
-						};
+						*status = "Entry not retrieved.".to_string();
+						*value = text_editor::Content::new();
 					};
 				}
 				Message::Set => {
 					let content_string = value.text();
 					if !query.is_empty() {
-						let new_db = db.clone();
-						new_db.write().unwrap().set(query.clone(), content_string);
-						self.app_state = AppState::Unlocked {
-							db_name: db_name.clone(),
-							master_key,
-							query: query.clone(),
-							value: value.clone(),
-							status: "Entry set.".to_string(),
-							db: new_db,
-						};
+						db.write().unwrap().set(query.clone(), content_string);
+						*status = "Entry set.".to_string();
 					} else {
-						self.app_state = AppState::Unlocked {
-							db_name: db_name.clone(),
-							master_key,
-							query: query.clone(),
-							value: value.clone(),
-							status: "Error: Query was empty".to_owned(),
-							db: db.clone(),
-						};
+						*status = "Query was empty.".to_string();
 					}
 				}
 				Message::Save => {
-					self.app_state = AppState::Unlocked {
-						db_name: db_name.clone(),
-						master_key,
-						query: query.clone(),
-						value: value.clone(),
-						status: "Save database not yet implemented.".to_owned(),
-						db: db.clone(),
-					};
+					*status = "Save database not yet implemented.".to_string();
 				}
 				Message::CloseWindow => {
 					return window::latest().and_then(window::close);
 				}
 				Message::DragWindow => {
-					self.app_state = AppState::Unlocked {
-						db_name: db_name.clone(),
-						master_key,
-						query: query.clone(),
-						value: value.clone(),
-						status: status.clone(),
-						db: db.clone(),
-					};
 					return window::latest().and_then(window::drag);
 				}
 				_ => {}
@@ -281,8 +184,6 @@ impl State {
 				column![components::title_bar(), unlock_panel].into()
 			}
 			AppState::Unlocked {
-				db_name: _,
-				master_key: _,
 				query,
 				value,
 				status,
