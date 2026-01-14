@@ -10,7 +10,7 @@ base64ct = "1.8.3"
 chacha20poly1305 = "0.10.1"
 getrandom = "0.3.4"
 hex = "0.4.3"
-iced = { version = "0.14", default-features = false, features = ["canvas", "tiny-skia", "tokio", "wayland"] }
+iced = { version = "0.14", default-features = false, features = ["advanced", "canvas", "highlighter", "tiny-skia", "tokio", "wayland"] }
 lz4 = "1.28.1"
 memsecurity = "3.5.2"
 reed-solomon = "0.2.1"

@@ -1,15 +1,15 @@
 pub mod components;
+pub mod messages;
 
 use crate::crypto;
 use crate::storage::volatile::Database;
 use iced::{
-	border, font,
+	border,
 	theme::Theme,
-	widget::{
-		button, center, column, container, mouse_area, row, space, text, text_editor, text_input,
-	},
-	window, Background, Center, Color, Element, Fill, Font, Size, Task,
+	widget::{center, column, container, row, space, text, text_editor, text_input},
+	window, Background, Center, Color, Element, Fill, Size, Task,
 };
+use messages::Message;
 use std::{
 	mem,
 	sync::{Arc, RwLock},
@@ -31,24 +31,10 @@ enum AppState {
 	},
 }
 
+pub const APP_NAME: &str = "DigiSafe";
+
 struct State {
 	app_state: AppState,
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-	AttemptUnlock,
-	UnlockResult([u8; 32]),
-	DbNameChanged(String),
-	PasswordChanged(String),
-	QueryInput(String),
-	QuerySubmit,
-	ValueAction(text_editor::Action),
-	Get,
-	Set,
-	Save,
-	CloseWindow,
-	DragWindow,
 }
 
 pub type Result = iced::Result;
@@ -56,7 +42,7 @@ pub type Result = iced::Result;
 pub fn run() -> Result {
 	iced::application(State::new, State::update, State::view)
 		.theme(components::black_hole_theme())
-		.title(State::title)
+		.title(APP_NAME)
 		.window(iced::window::Settings {
 			size: Size::new(1000.0, 800.0),
 			position: window::Position::Centered,
@@ -68,8 +54,6 @@ pub fn run() -> Result {
 }
 
 impl State {
-	const NAME: &str = "DigiSafe";
-
 	pub fn new() -> Self {
 		Self {
 			app_state: AppState::Locked {
@@ -264,62 +248,6 @@ impl State {
 	}
 
 	fn view(&self) -> Element<'_, Message> {
-		let title_bar = container(
-			row![
-				mouse_area(container(row![
-					space::horizontal(),
-					text("DigiSafe")
-						.size(14)
-						.font(Font {
-							weight: font::Weight::Bold,
-							..Default::default()
-						})
-						.color(Color::from_rgb8(80, 200, 80)),
-					space::horizontal()
-				]))
-				.on_press(Message::DragWindow),
-				button(
-					text("✕")
-						.font(Font {
-							weight: font::Weight::Bold,
-							..Default::default()
-						})
-						.size(18)
-						.align_y(Center)
-						.align_x(Center)
-				)
-				.width(42)
-				.height(36)
-				.style(|_theme: &Theme, status: button::Status| {
-					match status {
-						button::Status::Hovered => button::Style {
-							background: Some(Background::Color(Color::from_rgb8(150, 4, 250))),
-							text_color: Color::from_rgb8(100, 250, 100),
-							..button::Style::default()
-						},
-						_ => button::Style {
-							background: Some(Background::Color(Color::TRANSPARENT)),
-							text_color: Color::from_rgb8(120, 120, 120),
-							..button::Style::default()
-						},
-					}
-				})
-				.on_press(Message::CloseWindow),
-			]
-			.padding(0)
-			.align_y(iced::Center),
-		)
-		.width(Fill)
-		.height(36)
-		.style(|_theme| container::Style {
-			background: Some(Color::from_rgb8(4, 4, 4).into()),
-			border: border::Border {
-				color: Color::from_rgb8(12, 32, 12),
-				width: 2.0,
-				radius: 0.0.into(),
-			},
-			..Default::default()
-		});
 		match &self.app_state {
 			AppState::Locked {
 				db_name,
@@ -329,97 +257,17 @@ impl State {
 				let unlock_panel = container(center(
 					column![
 						text("Unlock Database").size(16),
-						text_input("name...", db_name)
-							.on_input(Message::DbNameChanged)
-							.padding(10)
-							.size(18)
-							.style(|_theme: &Theme, status: text_input::Status| match status {
-								text_input::Status::Focused { .. } => text_input::Style {
-									background: Background::Color(Color::from_rgb8(8, 4, 10)),
-									border: border::Border {
-										color: Color::from_rgb8(110, 10, 240),
-										width: 2.0,
-										radius: 5.0.into(),
-									},
-									icon: Color::from_rgb8(200, 180, 200),
-									placeholder: Color::from_rgb8(100, 90, 100),
-									value: Color::from_rgb8(20, 250, 20),
-									selection: Color::from_rgb8(110, 10, 240),
-								},
-								text_input::Status::Hovered => text_input::Style {
-									background: Background::Color(Color::from_rgb8(10, 8, 16)),
-									border: border::Border {
-										color: Color::from_rgb8(80, 8, 140),
-										width: 1.5,
-										radius: 5.0.into(),
-									},
-									icon: Color::from_rgb8(200, 180, 200),
-									placeholder: Color::from_rgb8(80, 70, 80),
-									value: Color::from_rgb8(200, 180, 200),
-									selection: Color::from_rgb8(110, 10, 240),
-								},
-								_ => text_input::Style {
-									background: Background::Color(Color::from_rgb8(4, 4, 8)),
-									border: border::Border {
-										color: Color::from_rgb8(60, 8, 100),
-										width: 1.0,
-										radius: 5.0.into(),
-									},
-									icon: Color::from_rgb8(200, 180, 200),
-									placeholder: Color::from_rgb8(80, 70, 80),
-									value: Color::from_rgb8(200, 180, 200),
-									selection: Color::from_rgb8(110, 10, 240),
-								},
-							}),
-						text_input("password...", password)
-							.on_input(Message::PasswordChanged)
+						components::styled_text_input("name...", db_name)
+							.on_input(Message::DbNameChanged),
+						components::styled_text_input("password...", password)
 							.secure(true)
-							.on_submit(Message::AttemptUnlock)
-							.padding(10)
-							.size(18)
-							.style(|_theme: &Theme, status: text_input::Status| match status {
-								text_input::Status::Focused { .. } => text_input::Style {
-									background: Background::Color(Color::from_rgb8(8, 4, 10)),
-									border: border::Border {
-										color: Color::from_rgb8(110, 10, 240),
-										width: 2.0,
-										radius: 5.0.into(),
-									},
-									icon: Color::from_rgb8(200, 180, 200),
-									placeholder: Color::from_rgb8(100, 90, 100),
-									value: Color::from_rgb8(20, 250, 20),
-									selection: Color::from_rgb8(110, 10, 240),
-								},
-								text_input::Status::Hovered => text_input::Style {
-									background: Background::Color(Color::from_rgb8(10, 8, 16)),
-									border: border::Border {
-										color: Color::from_rgb8(80, 8, 140),
-										width: 1.5,
-										radius: 5.0.into(),
-									},
-									icon: Color::from_rgb8(200, 180, 200),
-									placeholder: Color::from_rgb8(80, 70, 80),
-									value: Color::from_rgb8(200, 180, 200),
-									selection: Color::from_rgb8(110, 10, 240),
-								},
-								_ => text_input::Style {
-									background: Background::Color(Color::from_rgb8(4, 4, 8)),
-									border: border::Border {
-										color: Color::from_rgb8(60, 8, 100),
-										width: 1.0,
-										radius: 5.0.into(),
-									},
-									icon: Color::from_rgb8(200, 180, 200),
-									placeholder: Color::from_rgb8(80, 70, 80),
-									value: Color::from_rgb8(200, 180, 200),
-									selection: Color::from_rgb8(110, 10, 240),
-								},
-							}),
-						components::my_button(
+							.on_input(Message::PasswordChanged)
+							.on_submit(Message::AttemptUnlock),
+						components::styled_button(
 							if *is_processing {
-								"Unlocking".into()
+								"Unlocking"
 							} else {
-								"Unlock".into()
+								"Unlock"
 							},
 							Message::AttemptUnlock
 						)
@@ -430,7 +278,7 @@ impl State {
 				.width(Fill)
 				.height(Fill);
 
-				column![title_bar, unlock_panel].into()
+				column![components::title_bar(), unlock_panel].into()
 			}
 			AppState::Unlocked {
 				db_name: _,
@@ -440,49 +288,9 @@ impl State {
 				status,
 				db: _,
 			} => {
-				let query_bar = text_input("search...", query)
+				let query_bar = components::styled_text_input("search...", query)
 					.on_input(Message::QueryInput)
-					.on_submit(Message::QuerySubmit)
-					.padding(10)
-					.size(18)
-					.style(|_theme: &Theme, status: text_input::Status| match status {
-						text_input::Status::Focused { .. } => text_input::Style {
-							background: Background::Color(Color::from_rgb8(8, 4, 10)),
-							border: border::Border {
-								color: Color::from_rgb8(110, 10, 240),
-								width: 2.0,
-								radius: 5.0.into(),
-							},
-							icon: Color::from_rgb8(200, 180, 200),
-							placeholder: Color::from_rgb8(100, 90, 100),
-							value: Color::from_rgb8(20, 250, 20),
-							selection: Color::from_rgb8(110, 10, 240),
-						},
-						text_input::Status::Hovered => text_input::Style {
-							background: Background::Color(Color::from_rgb8(10, 8, 16)),
-							border: border::Border {
-								color: Color::from_rgb8(80, 8, 140),
-								width: 1.5,
-								radius: 5.0.into(),
-							},
-							icon: Color::from_rgb8(200, 180, 200),
-							placeholder: Color::from_rgb8(80, 70, 80),
-							value: Color::from_rgb8(200, 180, 200),
-							selection: Color::from_rgb8(110, 10, 240),
-						},
-						_ => text_input::Style {
-							background: Background::Color(Color::from_rgb8(4, 4, 8)),
-							border: border::Border {
-								color: Color::from_rgb8(60, 8, 100),
-								width: 1.0,
-								radius: 5.0.into(),
-							},
-							icon: Color::from_rgb8(200, 180, 200),
-							placeholder: Color::from_rgb8(80, 70, 80),
-							value: Color::from_rgb8(200, 180, 200),
-							selection: Color::from_rgb8(110, 10, 240),
-						},
-					});
+					.on_submit(Message::QuerySubmit);
 
 				let header = container(query_bar).padding(4).width(Fill);
 
@@ -534,11 +342,11 @@ impl State {
 
 				let button_bar = row![
 					space::horizontal(),
-					components::my_button("Get".into(), Message::Get),
+					components::styled_button("Get", Message::Get),
 					space::horizontal().width(20),
-					components::my_button("Set".into(), Message::Set),
+					components::styled_button("Set", Message::Set),
 					space::horizontal().width(20),
-					components::my_button("Save".into(), Message::Save),
+					components::styled_button("Save", Message::Save),
 					space::horizontal(),
 				]
 				.padding(16)
@@ -557,12 +365,15 @@ impl State {
 				.padding(1)
 				.width(Fill);
 
-				column![title_bar, header, main_content, button_bar, status_bar].into()
+				column![
+					components::title_bar(),
+					header,
+					main_content,
+					button_bar,
+					status_bar
+				]
+				.into()
 			}
 		}
-	}
-
-	fn title(&self) -> String {
-		State::NAME.to_string()
 	}
 }
