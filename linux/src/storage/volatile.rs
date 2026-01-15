@@ -1,53 +1,112 @@
 #![allow(dead_code)] // iced constructs this by Default.
 use memsecurity::{EncryptedMem, ZeroizeBytes};
-use std::{collections::BTreeMap, mem};
-use zeroize::Zeroize;
+use std::{
+	collections::BTreeMap,
+	mem,
+	sync::{Arc, RwLock},
+};
+use zeroize::{Zeroize, Zeroizing};
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Database {
-	key: EncryptedMem,
-	btmap: BTreeMap<String, EncryptedMem>,
+	pub master_key: Arc<RwLock<EncryptedMem>>,
+	pub meta: Arc<RwLock<BTreeMap<String, String>>>,
+	pub kvmap: Arc<RwLock<BTreeMap<String, EncryptedMem>>>,
 }
 
 impl Drop for Database {
 	fn drop(&mut self) {
-		let map = mem::take(&mut self.btmap);
-		for (mut key, _value) in map.into_iter() {
-			key.zeroize();
+		if let Some(rwlock) = Arc::get_mut(&mut self.kvmap) && let Ok(kvmap) = rwlock.get_mut() {
+			for (mut key, _value) in mem::take(kvmap).into_iter() {
+				key.zeroize();
+			}
 		}
 	}
 }
 
 impl Database {
-	pub fn set(&mut self, key: String, value: String) {
+	pub fn old(
+		master_key: [u8; 32],
+		meta: Arc<RwLock<BTreeMap<String, String>>>,
+		kvmap: Arc<RwLock<BTreeMap<String, String>>>,
+	) -> Database {
+		let master_key = Zeroizing::new(master_key);
+		let encrypted_master_key = Arc::new(RwLock::new(EncryptedMem::new()));
+		let _ = encrypted_master_key
+			.write()
+			.unwrap()
+			.encrypt(&master_key)
+			.unwrap();
+		let kvmap_encrypted = Arc::new(RwLock::new(BTreeMap::<String, EncryptedMem>::new()));
+		for (key, value) in kvmap.write().unwrap().iter_mut() {
+			let mut encrypted_value = EncryptedMem::new();
+			let _ = encrypted_value.encrypt(value);
+			kvmap_encrypted
+				.write()
+				.unwrap()
+				.insert(key.to_string(), encrypted_value);
+			value.zeroize();
+		}
+		Database {
+			master_key: encrypted_master_key,
+			meta,
+			kvmap: kvmap_encrypted,
+		}
+	}
+
+	pub fn new(master_key: [u8; 32], db_name: String) -> Database {
+		let master_key = Zeroizing::new(master_key);
+		let encrypted_master_key = Arc::new(RwLock::new(EncryptedMem::new()));
+		let _ = encrypted_master_key
+			.write()
+			.unwrap()
+			.encrypt(&master_key)
+			.unwrap();
+		let meta = Arc::new(RwLock::new(BTreeMap::new()));
+		meta.write()
+			.unwrap()
+			.insert("db_name".to_string(), db_name.to_string());
+		let kvmap = Arc::new(RwLock::new(BTreeMap::new()));
+		Database {
+			master_key: encrypted_master_key,
+			meta,
+			kvmap,
+		}
+	}
+
+	pub fn set(&self, key: String, value: String) {
 		let mut encrypted = EncryptedMem::new();
 		let _ = encrypted.encrypt(&value);
-		self.btmap.insert(key, encrypted);
+		self.kvmap.write().unwrap().insert(key, encrypted);
 	}
 
 	pub fn get(&self, key: &str) -> Option<String> {
-		self.btmap.get(key).and_then(|encrypted: &EncryptedMem| {
-			encrypted
-				.decrypt()
-				.ok()
-				.and_then(|bytes: ZeroizeBytes| String::from_utf8(bytes.as_ref().to_vec()).ok())
-		})
+		self.kvmap
+			.read()
+			.unwrap()
+			.get(key)
+			.and_then(|encrypted: &EncryptedMem| {
+				encrypted
+					.decrypt()
+					.ok()
+					.and_then(|bytes: ZeroizeBytes| String::from_utf8(bytes.as_ref().to_vec()).ok())
+			})
 	}
 
-	pub fn remove(&mut self, key: &str) -> bool {
-		self.btmap.remove(key).is_some()
+	pub fn remove(&self, key: &str) -> bool {
+		self.kvmap.write().unwrap().remove(key).is_some()
 	}
 
 	pub fn contains_key(&self, key: &str) -> bool {
-		self.btmap.contains_key(key)
+		self.kvmap.read().unwrap().contains_key(key)
 	}
 
 	pub fn len(&self) -> usize {
-		self.btmap.len()
+		self.kvmap.read().unwrap().len()
 	}
 
 	pub fn is_empty(&self) -> bool {
-		self.btmap.is_empty()
+		self.kvmap.read().unwrap().is_empty()
 	}
 }
 

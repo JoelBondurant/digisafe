@@ -1,7 +1,7 @@
 pub mod components;
 pub mod messages;
 
-use crate::crypto;
+use crate::storage::persistent;
 use crate::storage::volatile::Database;
 use iced::{
 	border,
@@ -10,7 +10,6 @@ use iced::{
 	window, Background, Center, Color, Element, Fill, Size, Task,
 };
 use messages::Message;
-use std::sync::{Arc, RwLock};
 
 enum AppState {
 	Locked {
@@ -19,12 +18,10 @@ enum AppState {
 		is_processing: bool,
 	},
 	Unlocked {
-		//db_name: String,
-		//master_key: [u8; 32],
 		query: String,
 		value: text_editor::Content,
 		status: String,
-		db: Arc<RwLock<Database>>,
+		db: Database,
 	},
 }
 
@@ -70,21 +67,19 @@ impl State {
 			} => match message {
 				Message::AttemptUnlock => {
 					*is_processing = true;
-					let pw = password.clone();
+					let db_name_clone = db_name.clone();
+					let master_password = password.clone();
 					return Task::perform(
-						async move {
-							let salt = b"digisafe";
-							crypto::master_key_derivation(pw.as_bytes(), salt)
-						},
+						async move { persistent::load(db_name_clone, master_password) },
 						Message::UnlockResult,
 					);
 				}
-				Message::UnlockResult(_master_key) => {
+				Message::UnlockResult(db) => {
 					self.app_state = AppState::Unlocked {
 						query: "".into(),
 						value: text_editor::Content::new(),
 						status: "Unlocked".into(),
-						db: Arc::new(RwLock::new(Database::default())),
+						db,
 					};
 				}
 				Message::DbNameChanged(new_db_name) => {
@@ -117,8 +112,7 @@ impl State {
 					value.perform(action);
 				}
 				Message::Get => {
-					let aval = db.read().unwrap().get(query);
-					if let Some(found_value) = aval {
+					if let Some(found_value) = db.get(query) {
 						*status = "Entry retrieved.".to_string();
 						*value = text_editor::Content::with_text(&found_value);
 					} else {
@@ -129,14 +123,21 @@ impl State {
 				Message::Set => {
 					let content_string = value.text();
 					if !query.is_empty() {
-						db.write().unwrap().set(query.clone(), content_string);
+						db.set(query.clone(), content_string);
 						*status = "Entry set.".to_string();
 					} else {
 						*status = "Query was empty.".to_string();
 					}
 				}
 				Message::Save => {
-					*status = "Save database not yet implemented.".to_string();
+					let db_clone = db.clone();
+					return Task::perform(
+						async move { persistent::save(db_clone) },
+						Message::SaveResult,
+					);
+				}
+				Message::SaveResult(msg) => {
+					*status = msg;
 				}
 				Message::CloseWindow => {
 					return window::latest().and_then(window::close);

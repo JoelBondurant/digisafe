@@ -1,9 +1,10 @@
+use crate::storage::volatile::Database;
 use iced::widget::text_editor;
 
 #[derive(Debug, Clone)]
 pub enum Message {
 	AttemptUnlock,
-	UnlockResult([u8; 32]),
+	UnlockResult(Database),
 	DbNameChanged(String),
 	PasswordChanged(String),
 	QueryInput(String),
@@ -12,6 +13,7 @@ pub enum Message {
 	Get,
 	Set,
 	Save,
+	SaveResult(String),
 	CloseWindow,
 	DragWindow,
 }
