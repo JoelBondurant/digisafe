@@ -123,7 +123,7 @@ mod tests {
 
 	#[test]
 	fn test_set_and_get() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("username".to_string(), "alice".to_string());
 		assert_eq!(db.get("username"), Some("alice".to_string()));
 		assert_eq!(db.len(), 1);
@@ -138,7 +138,7 @@ mod tests {
 
 	#[test]
 	fn test_overwrite_value() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("key".to_string(), "value1".to_string());
 		db.set("key".to_string(), "value2".to_string());
 		assert_eq!(db.get("key"), Some("value2".to_string()));
@@ -147,7 +147,7 @@ mod tests {
 
 	#[test]
 	fn test_multiple_keys() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("key1".to_string(), "value1".to_string());
 		db.set("key2".to_string(), "value2".to_string());
 		db.set("key3".to_string(), "value3".to_string());
@@ -159,7 +159,7 @@ mod tests {
 
 	#[test]
 	fn test_remove_existing_key() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("key".to_string(), "value".to_string());
 		assert!(db.contains_key("key"));
 		assert!(db.remove("key"));
@@ -171,13 +171,13 @@ mod tests {
 
 	#[test]
 	fn test_remove_nonexistent_key() {
-		let mut db = Database::default();
+		let db = Database::default();
 		assert!(!db.remove("nonexistent"));
 	}
 
 	#[test]
 	fn test_contains_key() {
-		let mut db = Database::default();
+		let db = Database::default();
 		assert!(!db.contains_key("key"));
 		db.set("key".to_string(), "value".to_string());
 		assert!(db.contains_key("key"));
@@ -187,7 +187,7 @@ mod tests {
 
 	#[test]
 	fn test_len_tracking() {
-		let mut db = Database::default();
+		let db = Database::default();
 		assert_eq!(db.len(), 0);
 		db.set("key1".to_string(), "value1".to_string());
 		assert_eq!(db.len(), 1);
@@ -203,7 +203,7 @@ mod tests {
 
 	#[test]
 	fn test_empty_string_value() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("empty".to_string(), "".to_string());
 		assert_eq!(db.get("empty"), Some("".to_string()));
 		assert!(db.contains_key("empty"));
@@ -211,7 +211,7 @@ mod tests {
 
 	#[test]
 	fn test_empty_string_key() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("".to_string(), "value".to_string());
 		assert_eq!(db.get(""), Some("value".to_string()));
 		assert!(db.contains_key(""));
@@ -219,7 +219,7 @@ mod tests {
 
 	#[test]
 	fn test_special_characters() {
-		let mut db = Database::default();
+		let db = Database::default();
 		let special = "!@#$%^&*()_+-=[]{}|;:',.<>?/~`";
 		db.set("special".to_string(), special.to_string());
 		assert_eq!(db.get("special"), Some(special.to_string()));
@@ -227,7 +227,7 @@ mod tests {
 
 	#[test]
 	fn test_unicode_values() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("emoji".to_string(), "🔒🔑🛡️".to_string());
 		db.set("chinese".to_string(), "你好世界".to_string());
 		db.set("arabic".to_string(), "مرحبا".to_string());
@@ -238,7 +238,7 @@ mod tests {
 
 	#[test]
 	fn test_long_values() {
-		let mut db = Database::default();
+		let db = Database::default();
 		let long_value = "a".repeat(10000);
 		db.set("long".to_string(), long_value.clone());
 		assert_eq!(db.get("long"), Some(long_value));
@@ -246,7 +246,7 @@ mod tests {
 
 	#[test]
 	fn test_sensitive_data_encryption() {
-		let mut db = Database::default();
+		let db = Database::default();
 		let password = "super_secret_password_123!@#";
 		let api_key = "sk_live_1234567890abcdefghijklmnop";
 		db.set("password".to_string(), password.to_string());
@@ -257,7 +257,7 @@ mod tests {
 
 	#[test]
 	fn test_multiple_operations_sequence() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("a".to_string(), "1".to_string());
 		db.set("b".to_string(), "2".to_string());
 		assert_eq!(db.len(), 2);
@@ -273,7 +273,7 @@ mod tests {
 
 	#[test]
 	fn test_drop_cleanup() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("key1".to_string(), "sensitive_data_1".to_string());
 		db.set("key2".to_string(), "sensitive_data_2".to_string());
 		drop(db);
@@ -281,7 +281,7 @@ mod tests {
 
 	#[test]
 	fn test_case_sensitive_keys() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("Key".to_string(), "value1".to_string());
 		db.set("key".to_string(), "value2".to_string());
 		db.set("KEY".to_string(), "value3".to_string());
@@ -293,7 +293,7 @@ mod tests {
 
 	#[test]
 	fn test_whitespace_in_values() {
-		let mut db = Database::default();
+		let db = Database::default();
 		db.set("spaces".to_string(), "value with spaces".to_string());
 		db.set("tabs".to_string(), "value\twith\ttabs".to_string());
 		db.set("newlines".to_string(), "value\nwith\nnewlines".to_string());
