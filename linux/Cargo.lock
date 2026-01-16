@@ -724,7 +724,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "digisafe2"
+name = "digisafe"
 version = "0.2.0"
 dependencies = [
  "apache-avro",
