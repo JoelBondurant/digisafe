@@ -5,6 +5,7 @@ use std::{
 	collections::BTreeMap,
 	env, fs,
 	io::Write,
+	mem,
 	path::PathBuf,
 	process::Command,
 	sync::{Arc, RwLock},
@@ -48,15 +49,7 @@ pub struct OuterAvroDatabase {
 
 impl InnerAvroDatabase {
 	fn get_nonce(&self) -> [u8; 24] {
-		let pre_nonce = self
-			.public_kv
-			.get("nonce")
-			.unwrap()
-			.parse::<u128>()
-			.unwrap();
-		let mut nonce = [0u8; 24];
-		nonce[..16].copy_from_slice(&pre_nonce.to_le_bytes());
-		nonce
+		parse_nonce_from_kv(&self.public_kv)
 	}
 
 	fn into_avro(self) -> Vec<u8> {
@@ -96,15 +89,7 @@ impl InnerAvroDatabase {
 
 impl OuterAvroDatabase {
 	fn get_nonce(&self) -> [u8; 24] {
-		let pre_nonce = self
-			.public_kv
-			.get("nonce")
-			.unwrap()
-			.parse::<u128>()
-			.unwrap();
-		let mut nonce = [0u8; 24];
-		nonce[..16].copy_from_slice(&pre_nonce.to_le_bytes());
-		nonce
+		parse_nonce_from_kv(&self.public_kv)
 	}
 
 	fn into_avro(self) -> Vec<u8> {
@@ -150,24 +135,44 @@ impl OuterAvroDatabase {
 	}
 }
 
-fn db_path(db_name: &str) -> PathBuf {
+impl Drop for OuterAvroDatabase {
+	fn drop(&mut self) {
+		for (mut key, mut value) in mem::take(&mut self.private_kv).into_iter() {
+			value.zeroize();
+			key.zeroize();
+		}
+	}
+}
+
+fn parse_nonce_from_kv(kv: &BTreeMap<String, String>) -> [u8; 24] {
+	let pre_nonce = kv.get("nonce").unwrap().parse::<u128>().unwrap();
+	let mut nonce = [0u8; 24];
+	nonce[..16].copy_from_slice(&pre_nonce.to_le_bytes());
+	nonce
+}
+
+fn base_path() -> PathBuf {
 	let mut apath = env::home_dir().unwrap_or_default();
-	apath.push(format!(".config/digisafe/{}.digisafe", db_name));
-	fs::create_dir_all(apath.parent().unwrap()).ok();
+	apath.push(".config/digisafe/");
+	fs::create_dir_all(&apath).ok();
+	apath
+}
+
+fn db_path(db_name: &str) -> PathBuf {
+	let mut apath = base_path();
+	apath.push(format!("{}.digisafe", db_name));
 	apath
 }
 
 fn temp_path(db_name: &str) -> PathBuf {
-	let mut apath = env::home_dir().unwrap_or_default();
-	apath.push(format!(".config/digisafe/.{}.digisafe", db_name));
-	fs::create_dir_all(apath.parent().unwrap()).ok();
+	let mut apath = base_path();
+	apath.push(format!(".{}.digisafe", db_name));
 	apath
 }
 
 fn pepper_path() -> String {
-	let mut apath = env::home_dir().unwrap_or_default();
-	apath.push(".config/digisafe/digipepper.cred");
-	fs::create_dir_all(apath.parent().unwrap()).ok();
+	let mut apath = base_path();
+	apath.push("digipepper.cred");
 	apath.to_str().unwrap().to_string()
 }
 
@@ -213,33 +218,35 @@ pub fn save(db: volatile::Database) -> String {
 	"Database saved.".to_string()
 }
 
+fn load_pepper() -> [u8; 32] {
+	let pepper_output = Command::new("systemd-creds")
+		.args(["decrypt", "--user", "--name=digipepper", &pepper_path()])
+		.output()
+		.unwrap();
+	let pepper_hex = Zeroizing::new(pepper_output.stdout);
+	let mut pepper = [0u8; 32];
+	hex::decode_to_slice(
+		std::str::from_utf8(&pepper_hex).unwrap().trim(),
+		&mut pepper,
+	)
+	.unwrap();
+	pepper
+}
+
 fn master_key_derivation(password: String, salt: [u8; 32]) -> [u8; 32] {
 	use argon2::{Algorithm, Argon2, ParamsBuilder, Version};
 	use sha3::{Digest, Sha3_256};
 	let password = Zeroizing::new(password);
-	let pepper: [u8; 32] = hex::decode(
-		String::from_utf8(
-			Command::new("systemd-creds")
-				.args(["decrypt", "--user", "--name=digipepper", &pepper_path()])
-				.output()
-				.unwrap()
-				.stdout,
-		)
-		.unwrap()
-		.trim(),
-	)
-	.unwrap()
-	.try_into()
-	.unwrap();
+	let pepper = load_pepper();
 	let mut pre_hasher = Sha3_256::new();
 	pre_hasher.update(salt);
 	pre_hasher.update(pepper);
 	pre_hasher.update(password.as_bytes());
 	let mut pre_hash = pre_hasher.finalize();
 	let main_params = ParamsBuilder::new()
-		.m_cost(2u32.pow(20))
+		.m_cost(2u32.pow(22))
 		.t_cost(1)
-		.p_cost(4)
+		.p_cost(1)
 		.output_len(32)
 		.build()
 		.unwrap();
@@ -257,6 +264,8 @@ fn master_key_derivation(password: String, salt: [u8; 32]) -> [u8; 32] {
 	post_hasher.update(pepper);
 	post_hasher.update(salt);
 	let post_hash: [u8; 32] = post_hasher.finalize().into();
+	let mut pepper = pepper;
+	pepper.zeroize();
 	pre_hash.zeroize();
 	main_hash.zeroize();
 	post_hash
