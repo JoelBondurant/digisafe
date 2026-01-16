@@ -112,7 +112,7 @@ impl State {
 					value.perform(action);
 				}
 				Message::Get => {
-					if let Some(found_value) = db.get(query) {
+					if let Some(found_value) = db.get_private(query) {
 						*status = "Entry retrieved.".to_string();
 						*value = text_editor::Content::with_text(&found_value);
 					} else {
@@ -123,7 +123,7 @@ impl State {
 				Message::Set => {
 					let content_string = value.text();
 					if !query.is_empty() {
-						db.set(query.clone(), content_string);
+						db.set_private(query.clone(), content_string);
 						*status = "Entry set.".to_string();
 					} else {
 						*status = "Query was empty.".to_string();
