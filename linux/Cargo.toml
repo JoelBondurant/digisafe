@@ -7,13 +7,14 @@ edition = "2024"
 apache-avro = "0.21.0"
 argon2 = "0.5.3"
 base64ct = "1.8.3"
+blake3 = "1.8.3"
 chacha20poly1305 = "0.10.1"
 getrandom = "0.3.4"
 hex = "0.4.3"
 iced = { version = "0.14", default-features = false, features = ["advanced", "canvas", "highlighter", "tiny-skia", "tokio", "wayland"] }
 lz4 = "1.28.1"
 memsecurity = "3.5.2"
-reed-solomon = "0.2.1"
+reed-solomon-erasure = { version = "6.0.0", features = ["simd-accel"] }
 rustix = "1.1.3"
 secmem-alloc = "0.4.0"
 serde = { version = "1.0.228", features = ["derive"] }

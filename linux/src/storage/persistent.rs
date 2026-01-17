@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{
 	collections::BTreeMap,
 	env, fs,
-	io::Write,
+	io::{Read, Seek, SeekFrom, Write},
 	mem,
 	path::PathBuf,
 	process::Command,
@@ -48,7 +48,7 @@ pub struct OuterAvroDatabase {
 }
 
 impl InnerAvroDatabase {
-	fn get_nonce(&self) -> [u8; 24] {
+	fn get_nonce(&self) -> [u8; NONCE_SIZE] {
 		parse_nonce_from_kv(&self.public_kv)
 	}
 
@@ -67,28 +67,28 @@ impl InnerAvroDatabase {
 	}
 
 	fn into_vec(self) -> Vec<u8> {
-		into_erasure_blocks(compress(self.into_avro()))
+		compress(self.into_avro())
 	}
 
 	fn from_vec(dat: Vec<u8>) -> Self {
-		Self::from_avro(decompress(from_erasure_blocks(dat)))
+		Self::from_avro(decompress(dat))
 	}
 
-	fn from_outer(outer_db: OuterAvroDatabase, master_key: [u8; 32]) -> Self {
+	fn from_outer(outer_db: OuterAvroDatabase, master_key: [u8; KEY_SIZE]) -> Self {
 		let nonce = outer_db.get_nonce();
 		let public_kv = outer_db.public_kv.clone();
 		let db64 = to_base64(&encrypt(outer_db.into_avro(), master_key, nonce));
 		Self { db64, public_kv }
 	}
 
-	fn into_outer(self, master_key: [u8; 32]) -> OuterAvroDatabase {
+	fn into_outer(self, master_key: [u8; KEY_SIZE]) -> OuterAvroDatabase {
 		let nonce = self.get_nonce();
 		OuterAvroDatabase::from_avro(decrypt(from_base64(&self.db64), master_key, nonce).unwrap())
 	}
 }
 
 impl OuterAvroDatabase {
-	fn get_nonce(&self) -> [u8; 24] {
+	fn get_nonce(&self) -> [u8; NONCE_SIZE] {
 		parse_nonce_from_kv(&self.public_kv)
 	}
 
@@ -106,15 +106,15 @@ impl OuterAvroDatabase {
 		from_value::<Self>(&reader.last().unwrap().unwrap()).unwrap()
 	}
 
-	fn into_inner(self, master_key: [u8; 32]) -> InnerAvroDatabase {
+	fn into_inner(self, master_key: [u8; KEY_SIZE]) -> InnerAvroDatabase {
 		InnerAvroDatabase::from_outer(self, master_key)
 	}
 
-	fn from_inner(inner_db: InnerAvroDatabase, master_key: [u8; 32]) -> Self {
+	fn from_inner(inner_db: InnerAvroDatabase, master_key: [u8; KEY_SIZE]) -> Self {
 		inner_db.into_outer(master_key)
 	}
 
-	fn into_volatile(self, master_key: [u8; 32]) -> volatile::Database {
+	fn into_volatile(self, master_key: [u8; KEY_SIZE]) -> volatile::Database {
 		let private_kv = Arc::new(RwLock::new(self.private_kv.clone()));
 		let public_kv = Arc::new(RwLock::new(self.public_kv.clone()));
 		volatile::Database::old(master_key, private_kv, public_kv)
@@ -144,9 +144,9 @@ impl Drop for OuterAvroDatabase {
 	}
 }
 
-fn parse_nonce_from_kv(kv: &BTreeMap<String, String>) -> [u8; 24] {
+fn parse_nonce_from_kv(kv: &BTreeMap<String, String>) -> [u8; NONCE_SIZE] {
 	let pre_nonce = kv.get("nonce").unwrap().parse::<u128>().unwrap();
-	let mut nonce = [0u8; 24];
+	let mut nonce = [0u8; NONCE_SIZE];
 	nonce[..16].copy_from_slice(&pre_nonce.to_le_bytes());
 	nonce
 }
@@ -179,9 +179,9 @@ fn pepper_path() -> String {
 pub fn load(db_name: String, master_password: String) -> volatile::Database {
 	let path = db_path(&db_name);
 	if path.exists() {
-		let dat = fs::read(path).unwrap();
+		let dat = from_erasure_file(&db_name);
 		let inner_db = InnerAvroDatabase::from_vec(dat);
-		let digisalt: [u8; 32] = hex::decode(inner_db.public_kv.get("digisalt").unwrap())
+		let digisalt: [u8; KEY_SIZE] = hex::decode(inner_db.public_kv.get("digisalt").unwrap())
 			.unwrap()
 			.try_into()
 			.unwrap();
@@ -189,7 +189,7 @@ pub fn load(db_name: String, master_password: String) -> volatile::Database {
 		let outer_db = OuterAvroDatabase::from_inner(inner_db, master_key);
 		outer_db.into_volatile(master_key)
 	} else {
-		let mut digisalt = [0u8; 32];
+		let mut digisalt = [0u8; KEY_SIZE];
 		getrandom::fill(&mut digisalt).unwrap();
 		let master_key = master_key_derivation(master_password, digisalt);
 		volatile::Database::new(master_key, digisalt, db_name)
@@ -209,22 +209,18 @@ pub fn save(db: volatile::Database) -> String {
 	let outer_db = OuterAvroDatabase::from_volatile(&db);
 	let inner_db = outer_db.into_inner(master_key.as_ref().try_into().unwrap());
 	let db_name = db.public_kv.read().unwrap().get("db_name").unwrap().clone();
-	let tmp_path = temp_path(&db_name);
-	let path = db_path(&db_name);
-	let mut dat = inner_db.into_vec();
-	fs::write(&tmp_path, &dat).unwrap();
-	fs::rename(tmp_path, path).unwrap();
-	dat.zeroize();
+	let dat = inner_db.into_vec();
+	into_erasure_file(dat, &db_name);
 	"Database saved.".to_string()
 }
 
-fn load_pepper() -> [u8; 32] {
+fn load_pepper() -> [u8; KEY_SIZE] {
 	let pepper_output = Command::new("systemd-creds")
 		.args(["decrypt", "--user", "--name=digipepper", &pepper_path()])
 		.output()
 		.unwrap();
 	let pepper_hex = Zeroizing::new(pepper_output.stdout);
-	let mut pepper = [0u8; 32];
+	let mut pepper = [0u8; KEY_SIZE];
 	hex::decode_to_slice(
 		std::str::from_utf8(&pepper_hex).unwrap().trim(),
 		&mut pepper,
@@ -233,7 +229,7 @@ fn load_pepper() -> [u8; 32] {
 	pepper
 }
 
-fn master_key_derivation(password: String, salt: [u8; 32]) -> [u8; 32] {
+fn master_key_derivation(password: String, salt: [u8; KEY_SIZE]) -> [u8; KEY_SIZE] {
 	use argon2::{Algorithm, Argon2, ParamsBuilder, Version};
 	use sha3::{Digest, Sha3_256};
 	let password = Zeroizing::new(password);
@@ -247,11 +243,11 @@ fn master_key_derivation(password: String, salt: [u8; 32]) -> [u8; 32] {
 		.m_cost(2u32.pow(22))
 		.t_cost(1)
 		.p_cost(1)
-		.output_len(32)
+		.output_len(KEY_SIZE)
 		.build()
 		.unwrap();
 	let main_hasher = Argon2::new(Algorithm::Argon2id, Version::V0x13, main_params);
-	let mut main_hash = [0u8; 32];
+	let mut main_hash = [0u8; KEY_SIZE];
 	main_hasher
 		.hash_password_into(
 			&pre_hash,
@@ -263,7 +259,7 @@ fn master_key_derivation(password: String, salt: [u8; 32]) -> [u8; 32] {
 	post_hasher.update(main_hash);
 	post_hasher.update(pepper);
 	post_hasher.update(salt);
-	let post_hash: [u8; 32] = post_hasher.finalize().into();
+	let post_hash: [u8; KEY_SIZE] = post_hasher.finalize().into();
 	let mut pepper = pepper;
 	pepper.zeroize();
 	pre_hash.zeroize();
@@ -298,7 +294,10 @@ fn decompress(msg_enc: Vec<u8>) -> Vec<u8> {
 	msg
 }
 
-fn encrypt(msg: Vec<u8>, key: [u8; 32], nonce: [u8; 24]) -> Vec<u8> {
+const KEY_SIZE: usize = 32;
+const NONCE_SIZE: usize = 24;
+
+fn encrypt(msg: Vec<u8>, key: [u8; KEY_SIZE], nonce: [u8; NONCE_SIZE]) -> Vec<u8> {
 	use chacha20poly1305::{
 		aead::{Aead, KeyInit},
 		XChaCha20Poly1305,
@@ -307,7 +306,7 @@ fn encrypt(msg: Vec<u8>, key: [u8; 32], nonce: [u8; 24]) -> Vec<u8> {
 	cipher.encrypt(&nonce.into(), &msg[..]).unwrap()
 }
 
-fn decrypt(msg_enc: Vec<u8>, key: [u8; 32], nonce: [u8; 24]) -> Option<Vec<u8>> {
+fn decrypt(msg_enc: Vec<u8>, key: [u8; KEY_SIZE], nonce: [u8; NONCE_SIZE]) -> Option<Vec<u8>> {
 	use chacha20poly1305::{
 		aead::{Aead, KeyInit},
 		XChaCha20Poly1305,
@@ -316,36 +315,83 @@ fn decrypt(msg_enc: Vec<u8>, key: [u8; 32], nonce: [u8; 24]) -> Option<Vec<u8>> 
 	cipher.decrypt(&nonce.into(), msg_enc.as_ref()).ok()
 }
 
-fn to_erasure_block(dat: &[u8]) -> Vec<u8> {
-	use reed_solomon::Encoder;
-	let enc = Encoder::new(8);
-	Vec::from(&enc.encode(dat)[..])
-}
+// Erasure section:
+const DATA_SHARDS: usize = 8;
+const PARITY_SHARDS: usize = 4;
+const TOTAL_SHARDS: usize = DATA_SHARDS + PARITY_SHARDS;
+const MIN_SHARD_SIZE: usize = 4096;
 
-fn from_erasure_block(dat_enc: &[u8]) -> Vec<u8> {
-	use reed_solomon::Decoder;
-	let dec = Decoder::new(8);
-	dec.correct(dat_enc, None).unwrap().data().to_owned()
-}
-
-fn into_erasure_blocks(dat: Vec<u8>) -> Vec<u8> {
-	let block_size = 247usize;
-	let num_blocks = dat.chunks(block_size).count();
-	let mut dat_enc = Vec::with_capacity(dat.len() + 8 * num_blocks);
-	for chunk in dat.chunks(block_size) {
-		let enc_dat_slice = to_erasure_block(chunk);
-		dat_enc.extend_from_slice(&enc_dat_slice);
+fn into_erasure_file(dat: Vec<u8>, db_name: &str) {
+	use reed_solomon_erasure::galois_8::ReedSolomon;
+	let original_len = dat.len() as u64;
+	let raw_shard_size = dat.len().div_ceil(DATA_SHARDS);
+	let shard_size = std::cmp::max(raw_shard_size, MIN_SHARD_SIZE);
+	let mut padded_data = dat;
+	padded_data.resize(shard_size * DATA_SHARDS, 0);
+	let mut shards: Vec<Vec<u8>> = padded_data
+		.chunks_exact(shard_size)
+		.map(|c| c.to_vec())
+		.collect();
+	for _ in 0..PARITY_SHARDS {
+		shards.push(vec![0; shard_size]);
 	}
-	dat_enc
+	let rs = ReedSolomon::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
+	rs.encode(&mut shards).unwrap();
+	let tmp_path = temp_path(db_name);
+	let mut file = fs::File::create(&tmp_path).unwrap();
+	for shard in shards {
+		let hash = blake3::hash(&shard);
+		file.write_all(&original_len.to_le_bytes()).unwrap();
+		file.write_all(hash.as_bytes()).unwrap();
+		file.write_all(&shard).unwrap();
+	}
+	file.sync_all().unwrap();
+	mem::drop(file);
+	let path = db_path(db_name);
+	fs::rename(tmp_path, path).unwrap();
+	padded_data.zeroize();
 }
 
-fn from_erasure_blocks(dat_enc: Vec<u8>) -> Vec<u8> {
-	let block_size = 255usize;
-	let num_blocks = dat_enc.chunks(block_size).count();
-	let mut dat = Vec::with_capacity(dat_enc.len() - 8 * num_blocks);
-	for chunk in dat_enc.chunks(block_size) {
-		let dat_slice = from_erasure_block(chunk);
-		dat.extend_from_slice(&dat_slice);
+fn from_erasure_file(db_name: &str) -> Vec<u8> {
+	use reed_solomon_erasure::galois_8::ReedSolomon;
+	let mut file = fs::File::open(db_path(db_name)).unwrap();
+	let file_len = file.metadata().unwrap().len();
+	let chunk_size = (file_len as usize) / TOTAL_SHARDS;
+	let header_size = 8 + 32;
+	let shard_size = chunk_size - header_size;
+	let mut original_len: Option<u64> = None;
+	let mut shards: Vec<Option<Vec<u8>>> = Vec::new();
+	for idx in 0..TOTAL_SHARDS {
+		let mut meta_buf = [0u8; 8];
+		let mut hash_buf = [0u8; 32];
+		let mut data_buf = vec![0u8; shard_size];
+		file.seek(SeekFrom::Start((idx * chunk_size) as u64))
+			.unwrap();
+		let success = file
+			.read_exact(&mut meta_buf)
+			.and_then(|_| file.read_exact(&mut hash_buf))
+			.and_then(|_| file.read_exact(&mut data_buf));
+		match success {
+			Ok(_) => {
+				if blake3::hash(&data_buf).as_bytes() == &hash_buf {
+					original_len.get_or_insert(u64::from_le_bytes(meta_buf));
+					shards.push(Some(data_buf));
+				} else {
+					shards.push(None);
+				}
+			}
+			Err(_) => shards.push(None),
+		}
 	}
-	dat
+	let rs = ReedSolomon::new(DATA_SHARDS, PARITY_SHARDS).unwrap();
+	rs.reconstruct_data(&mut shards).unwrap();
+	let mut recovered: Vec<u8> = shards
+		.iter()
+		.take(DATA_SHARDS)
+		.filter_map(|shard| shard.as_ref())
+		.flatten()
+		.copied()
+		.collect();
+	recovered.truncate(original_len.unwrap() as usize);
+	recovered
 }

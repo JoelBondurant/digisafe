@@ -15,6 +15,8 @@ pub struct Database {
 	pub public_kv: Arc<RwLock<BTreeMap<String, String>>>,
 }
 
+const KEY_SIZE: usize = 32;
+
 impl Drop for Database {
 	fn drop(&mut self) {
 		if let Some(rwlock) = Arc::get_mut(&mut self.private_kv) && let Ok(private_kv) = rwlock.get_mut() {
@@ -27,7 +29,7 @@ impl Drop for Database {
 
 impl Database {
 	pub fn old(
-		master_key: [u8; 32],
+		master_key: [u8; KEY_SIZE],
 		private_kv: Arc<RwLock<BTreeMap<String, String>>>,
 		public_kv: Arc<RwLock<BTreeMap<String, String>>>,
 	) -> Database {
@@ -55,7 +57,7 @@ impl Database {
 		}
 	}
 
-	pub fn new(master_key: [u8; 32], digisalt: [u8; 32], db_name: String) -> Database {
+	pub fn new(master_key: [u8; KEY_SIZE], digisalt: [u8; KEY_SIZE], db_name: String) -> Database {
 		let master_key = Zeroizing::new(master_key);
 		let encrypted_master_key = Arc::new(RwLock::new(EncryptedMem::new()));
 		let _ = encrypted_master_key
