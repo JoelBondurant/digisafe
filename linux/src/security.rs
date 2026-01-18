@@ -1,11 +1,9 @@
 /*
 * Todo:
-* rustix::mm::memlockall
-* check for secure boot parameters
+* check for tpm boot parameters
 * check total memory encryption
 * check for full disk encryption
 * apparmor or selinux setup
-* additional os level application
 */
 
 use rustix::{
@@ -52,7 +50,7 @@ pub fn force_secure_backend() {
 }
 
 fn check_env(var: &str) {
-	if std::env::var(var).map(|v| !v.is_empty()).unwrap_or(false) {
+	if env::var(var).map(|v| !v.is_empty()).unwrap_or(false) {
 		panic!("SECURITY VIOLATION: {} is set.", var);
 	}
 }
