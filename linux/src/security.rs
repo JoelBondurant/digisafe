@@ -8,7 +8,7 @@
 
 use rustix::{
 	mm::{mlockall, MlockAllFlags},
-	process::{getrlimit, set_dumpable_behavior, DumpableBehavior, Resource},
+	process::{getrlimit, set_dumpable_behavior, setrlimit, DumpableBehavior, Resource, Rlimit},
 };
 use std::env;
 
@@ -31,21 +31,28 @@ fn lock_memory_pages() {
 }
 
 fn set_not_dumpable() {
+	let _ = setrlimit(
+		Resource::Core,
+		Rlimit {
+			current: Some(0),
+			maximum: Some(0),
+		},
+	);
 	let _ = set_dumpable_behavior(DumpableBehavior::NotDumpable);
 }
 
-fn verify_session_type() {
-	let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
-	if session_type != "wayland" {
-		panic!("SECURITY VIOLATION: XDG_SESSION_TYPE must be set to wayland.");
+pub fn force_secure_display() {
+	if env::var("WAYLAND_DISPLAY").ok().as_deref() != Some("wayland-0") {
+		unsafe {
+			env::set_var("WAYLAND_DISPLAY", "wayland-0");
+		}
 	}
 }
 
-pub fn force_secure_backend() {
-	if env::var("WINIT_UNIX_BACKEND").ok().as_deref() != Some("wayland") {
-		unsafe {
-			env::set_var("WINIT_UNIX_BACKEND", "wayland");
-		}
+fn verify_secure_display() {
+	let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
+	if session_type != "wayland" {
+		panic!("SECURITY VIOLATION: XDG_SESSION_TYPE must be set to wayland.");
 	}
 }
 
@@ -61,9 +68,9 @@ fn enforce_no_preload() {
 }
 
 pub fn preflight() {
+	force_secure_display();
 	lock_memory_pages();
 	set_not_dumpable();
-	force_secure_backend();
-	verify_session_type();
 	enforce_no_preload();
+	verify_secure_display();
 }

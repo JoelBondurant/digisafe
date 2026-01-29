@@ -2,20 +2,23 @@ pub mod colors;
 pub mod components;
 pub mod messages;
 
+use crate::storage::interface::PasswordEntry;
 use crate::storage::persistent;
 use crate::storage::volatile::Database;
-use iced::{widget::text_editor, window, Element, Size, Task};
+use iced::{application, widget::text_editor, window, Element, Size, Task};
+use memsecurity::EncryptedMem;
 use messages::Message;
 
 enum AppState {
 	Locked {
 		db_name: String,
-		password: String,
+		db_password: EncryptedMem,
 		is_processing: bool,
 	},
 	Unlocked {
 		query: String,
-		value: text_editor::Content,
+		password_entry: PasswordEntry,
+		note: text_editor::Content,
 		status: String,
 		db: Database,
 	},
@@ -30,10 +33,10 @@ struct State {
 pub type Result = iced::Result;
 
 pub fn run() -> Result {
-	iced::application(State::new, State::update, State::view)
+	application(State::new, State::update, State::view)
 		.theme(components::theme())
 		.title(APP_NAME)
-		.window(iced::window::Settings {
+		.window(window::Settings {
 			size: Size::new(1000.0, 800.0),
 			position: window::Position::Centered,
 			decorations: false,
@@ -48,7 +51,7 @@ impl State {
 		Self {
 			app_state: AppState::Locked {
 				db_name: "".into(),
-				password: "".into(),
+				db_password: "".into(),
 				is_processing: false,
 			},
 		}
@@ -58,22 +61,23 @@ impl State {
 		match &mut self.app_state {
 			AppState::Locked {
 				db_name,
-				password,
+				db_password,
 				is_processing,
 			} => match message {
 				Message::AttemptUnlock => {
 					*is_processing = true;
 					let db_name_clone = db_name.clone();
-					let master_password = password.clone();
+					let db_password_clone = db_password.clone();
 					return Task::perform(
-						async move { persistent::load(db_name_clone, master_password) },
+						async move { persistent::load(db_name_clone, db_password_clone) },
 						Message::UnlockResult,
 					);
 				}
 				Message::UnlockResult(db) => {
 					self.app_state = AppState::Unlocked {
 						query: "".into(),
-						value: text_editor::Content::new(),
+						password_entry: PasswordEntry::default(),
+						note: text_editor::Content::new(),
 						status: "Unlocked".into(),
 						db,
 					};
@@ -82,7 +86,7 @@ impl State {
 					*db_name = new_db_name;
 				}
 				Message::PasswordChanged(new_password) => {
-					*password = new_password;
+					*db_password = new_password;
 				}
 				Message::CloseWindow => {
 					return window::latest().and_then(window::close);
@@ -94,7 +98,8 @@ impl State {
 			},
 			AppState::Unlocked {
 				query,
-				value,
+				password_entry,
+				note,
 				status,
 				db,
 			} => match message {
@@ -105,12 +110,12 @@ impl State {
 					return Task::done(Message::Get);
 				}
 				Message::ValueAction(action) => {
-					value.perform(action);
+					note.perform(action);
 				}
 				Message::Get => {
-					if let Some(found_value) = db.get_private(query) {
+					if let Some(entry) = db.get_private(query) {
 						*status = "Entry retrieved.".to_string();
-						*value = text_editor::Content::with_text(&found_value);
+						*note = text_editor::Content::with_text(&found_value);
 					} else {
 						*status = "Entry not retrieved.".to_string();
 						*value = text_editor::Content::new();
@@ -151,15 +156,15 @@ impl State {
 		match &self.app_state {
 			AppState::Locked {
 				db_name,
-				password,
+				db_password,
 				is_processing,
-			} => components::unlock_screen(db_name, password, is_processing),
+			} => components::unlock_screen(db_name, db_password, is_processing),
 			AppState::Unlocked {
 				query,
-				value,
+				entry,
 				status,
 				db: _,
-			} => components::main_screen(query, value, status),
+			} => components::main_screen(query, entry, status),
 		}
 	}
 }

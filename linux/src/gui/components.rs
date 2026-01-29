@@ -89,14 +89,14 @@ pub fn title_bar<'a>() -> Element<'a, Message> {
 
 pub fn unlock_screen<'a>(
 	db_name: &str,
-	password: &str,
+	db_password: &str,
 	is_processing: &bool,
 ) -> Element<'a, Message> {
 	let unlock_panel = container(center(
 		column![
 			center(text("Unlock Database").color(colors::BRAND_GREEN).size(18)).height(30),
 			styled_text_input("db_name...", db_name).on_input(Message::DbNameChanged),
-			styled_text_input("db_password...", password)
+			styled_text_input("db_password...", db_password)
 				.secure(true)
 				.on_input(Message::PasswordChanged)
 				.on_submit(Message::AttemptUnlock),
@@ -122,18 +122,26 @@ pub fn unlock_screen<'a>(
 
 pub fn main_screen<'a>(
 	query: &str,
-	value: &'a text_editor::Content,
+	password: &str,
+	note: &'a text_editor::Content,
 	status: &'a str,
 ) -> Element<'a, Message> {
-	let query_bar = styled_text_input("search...", query)
+	let query_input = styled_text_input("search...", query)
 		.on_input(Message::QueryInput)
 		.on_submit(Message::QuerySubmit);
 
-	let header = container(query_bar).padding(4).width(Fill);
+	let password_input = styled_text_input("password", password)
+		.secure(true)
+		.on_input(Message::QueryInput)
+		.on_submit(Message::QuerySubmit);
 
-	let value_editor = styled_text_editor("value".into(), value).on_action(Message::ValueAction);
+	let header = container(column![query_input, password_input])
+		.padding(4)
+		.width(Fill);
 
-	let main_content = container(center(column![value_editor].spacing(20)))
+	let note_editor = styled_text_editor("note".into(), notes).on_action(Message::NoteAction);
+
+	let main_content = container(center(column![note_editor].spacing(20)))
 		.padding(4)
 		.width(Fill);
 
