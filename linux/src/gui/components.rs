@@ -1,5 +1,5 @@
-use crate::gui::colors;
 use crate::gui::messages::Message;
+use crate::{gui::colors, storage::entry::PasswordEntry};
 
 use iced::{
 	advanced::text::highlighter::PlainText,
@@ -97,8 +97,9 @@ pub fn unlock_screen<'a>(
 			center(text("Unlock Database").color(colors::BRAND_GREEN).size(18)).height(30),
 			styled_text_input("db_name...", db_name).on_input(Message::DbNameChanged),
 			styled_text_input("db_password...", db_password)
+				.on_input(Message::DbPasswordChanged)
 				.secure(true)
-				.on_input(Message::PasswordChanged)
+				.on_input(Message::DbPasswordChanged)
 				.on_submit(Message::AttemptUnlock),
 			center(styled_button(
 				if *is_processing {
@@ -120,36 +121,38 @@ pub fn unlock_screen<'a>(
 	column![title_bar(), unlock_panel].into()
 }
 
-pub fn main_screen<'a>(
+pub fn password_screen<'a>(
 	query: &str,
-	password: &str,
+	password_entry: &PasswordEntry,
 	note: &'a text_editor::Content,
 	status: &'a str,
 ) -> Element<'a, Message> {
-	let query_input = styled_text_input("search...", query)
+	let query_input = styled_query_input("query...", query)
 		.on_input(Message::QueryInput)
 		.on_submit(Message::QuerySubmit);
-
-	let password_input = styled_text_input("password", password)
+	let header = container(column![query_input]).padding(8).width(Fill);
+	let name_input = styled_text_input("name", password_entry.get_name())
+		.on_input(Message::PasswordEntryNameInput)
+		.on_submit(Message::PasswordEntrySet);
+	let username_input = styled_text_input("username", password_entry.get_username())
+		.on_input(Message::PasswordEntryUsernameInput)
+		.on_submit(Message::PasswordEntrySet);
+	let password_input = styled_text_input("password", password_entry.get_password())
 		.secure(true)
-		.on_input(Message::QueryInput)
-		.on_submit(Message::QuerySubmit);
-
-	let header = container(column![query_input, password_input])
-		.padding(4)
-		.width(Fill);
-
-	let note_editor = styled_text_editor("note".into(), notes).on_action(Message::NoteAction);
-
-	let main_content = container(center(column![note_editor].spacing(20)))
-		.padding(4)
-		.width(Fill);
-
+		.on_input(Message::PasswordEntryPasswordInput)
+		.on_submit(Message::PasswordEntrySet);
+	let note_editor =
+		styled_text_editor("note".into(), note).on_action(Message::PasswordEntryNoteAction);
+	let main_content = container(center(
+		column![name_input, username_input, password_input, note_editor,].spacing(4),
+	))
+	.padding(4)
+	.width(Fill);
 	let button_bar = row![
 		space::horizontal(),
-		styled_button("Get", Message::Get),
+		styled_button("Get", Message::PasswordEntryGet),
 		space::horizontal().width(20),
-		styled_button("Set", Message::Set),
+		styled_button("Set", Message::PasswordEntrySet),
 		space::horizontal().width(20),
 		styled_button("Save", Message::Save),
 		space::horizontal(),
@@ -246,6 +249,53 @@ pub fn styled_text_input<'a, Message: Clone + 'a>(
 				background: Background::Color(colors::BG_INPUT),
 				border: border::Border {
 					color: colors::BORDER_PRIMARY,
+					width: 1.0,
+					radius: 5.0.into(),
+				},
+				icon: colors::TEXT_SECONDARY,
+				placeholder: colors::TEXT_PLACEHOLDER,
+				value: colors::TEXT_SECONDARY,
+				selection: colors::SELECTION,
+			},
+		})
+}
+
+pub fn styled_query_input<'a, Message: Clone + 'a>(
+	default_str: &str,
+	input_str: &str,
+) -> TextInput<'a, Message> {
+	text_input(default_str, input_str)
+		.padding(10)
+		.size(18)
+		.style(|_theme: &Theme, status: text_input::Status| match status {
+			text_input::Status::Focused { .. } => text_input::Style {
+				background: Background::Color(colors::BG_INPUT_FOCUS),
+				border: border::Border {
+					color: colors::BORDER_ACCENT_QUERY,
+					width: 2.0,
+					radius: 5.0.into(),
+				},
+				icon: colors::TEXT_SECONDARY,
+				placeholder: colors::TEXT_PLACEHOLDER_HOVER,
+				value: colors::TEXT_SECONDARY,
+				selection: colors::SELECTION,
+			},
+			text_input::Status::Hovered => text_input::Style {
+				background: Background::Color(colors::BG_INPUT_HOVER),
+				border: border::Border {
+					color: colors::BORDER_HOVER_QUERY,
+					width: 1.5,
+					radius: 5.0.into(),
+				},
+				icon: colors::TEXT_SECONDARY,
+				placeholder: colors::TEXT_PLACEHOLDER,
+				value: colors::TEXT_SECONDARY,
+				selection: colors::SELECTION,
+			},
+			_ => text_input::Style {
+				background: Background::Color(colors::BG_INPUT),
+				border: border::Border {
+					color: colors::BORDER_PRIMARY_QUERY,
 					width: 1.0,
 					radius: 5.0.into(),
 				},

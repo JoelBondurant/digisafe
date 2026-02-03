@@ -6,39 +6,48 @@
 * apparmor or selinux setup
 */
 
-use rustix::{
-	mm::{mlockall, MlockAllFlags},
-	process::{getrlimit, set_dumpable_behavior, setrlimit, DumpableBehavior, Resource, Rlimit},
+use libc::{
+	getrlimit, mlockall, prctl, rlimit, setrlimit, MCL_CURRENT, MCL_FUTURE, PR_SET_DUMPABLE,
+	RLIMIT_CORE, RLIMIT_MEMLOCK,
 };
 use std::env;
 
 pub fn get_memory_lock_limits() -> String {
-	let limits = getrlimit(Resource::Memlock);
-	match (limits.current, limits.maximum) {
-		(Some(limit_current), Some(limit_max)) => format!(
-			"{} bytes current, {} bytes maximum",
-			limit_current, limit_max
-		),
-		_ => "Memlock limit error.".to_string(),
+	unsafe {
+		let mut rlim = rlimit {
+			rlim_cur: 0,
+			rlim_max: 0,
+		};
+		if getrlimit(RLIMIT_MEMLOCK, &mut rlim) == 0 {
+			format!(
+				"{} bytes current, {} bytes maximum",
+				rlim.rlim_cur, rlim.rlim_max
+			)
+		} else {
+			"Memlock limit error.".to_string()
+		}
 	}
 }
 
 fn lock_memory_pages() {
-	if mlockall(MlockAllFlags::CURRENT | MlockAllFlags::FUTURE).is_err() {
-		eprintln!("Memory lock failure.");
-		eprintln!("Memory lock limits: {}.", get_memory_lock_limits());
+	unsafe {
+		let flags = MCL_CURRENT | MCL_FUTURE;
+		if mlockall(flags) != 0 {
+			eprintln!("Memory lock failure.");
+			eprintln!("Memory lock limits: {}.", get_memory_lock_limits());
+		}
 	}
 }
 
 fn set_not_dumpable() {
-	let _ = setrlimit(
-		Resource::Core,
-		Rlimit {
-			current: Some(0),
-			maximum: Some(0),
-		},
-	);
-	let _ = set_dumpable_behavior(DumpableBehavior::NotDumpable);
+	unsafe {
+		let rlim = rlimit {
+			rlim_cur: 0,
+			rlim_max: 0,
+		};
+		setrlimit(RLIMIT_CORE, &rlim);
+		prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
+	}
 }
 
 pub fn force_secure_display() {

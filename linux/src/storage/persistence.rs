@@ -1,155 +1,18 @@
-use crate::storage::volatile;
+use crate::storage::{
+	database::{Database, EntryTag, InteriorDatabase},
+	entry::MetaEntry,
+	secret::SecretMemory,
+};
 
-use serde::{Deserialize, Serialize};
 use std::{
-	collections::BTreeMap,
 	env, fs,
 	io::{Read, Seek, SeekFrom, Write},
 	mem,
 	path::PathBuf,
 	process::Command,
-	sync::{Arc, RwLock},
 	time::SystemTime,
 };
 use zeroize::{Zeroize, Zeroizing};
-
-const INNER_AVRO_SCHEMA: &str = r#"
-{
-	"type": "record",
-	"name": "inner",
-	"fields": [
-		{"name": "db64", "type": "string"},
-		{"name": "public_kv", "type": {"type": "map", "values": "string"}}
-	]
-}
-"#;
-
-const OUTER_AVRO_SCHEMA: &str = r#"
-{
-	"type": "record",
-	"name": "outer",
-	"fields": [
-		{"name": "private_kv", "type": {"type": "map", "values": "string"}},
-		{"name": "public_kv", "type": {"type": "map", "values": "string"}}
-	]
-}
-"#;
-
-#[derive(Deserialize, Serialize)]
-pub struct InnerAvroDatabase {
-	db64: String,
-	public_kv: BTreeMap<String, String>,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct OuterAvroDatabase {
-	private_kv: BTreeMap<String, String>,
-	public_kv: BTreeMap<String, String>,
-}
-
-impl InnerAvroDatabase {
-	fn get_nonce(&self) -> [u8; NONCE_SIZE] {
-		parse_nonce_from_kv(&self.public_kv)
-	}
-
-	fn into_avro(self) -> Vec<u8> {
-		use apache_avro::{to_value, Schema, Writer};
-		let schema = Schema::parse_str(INNER_AVRO_SCHEMA).unwrap();
-		let mut writer = Writer::new(&schema, Vec::new());
-		writer.append(to_value(self).unwrap()).unwrap();
-		writer.into_inner().unwrap()
-	}
-
-	fn from_avro(avro_dat: Vec<u8>) -> Self {
-		use apache_avro::{from_value, Reader};
-		let reader = Reader::new(&avro_dat[..]).unwrap();
-		from_value::<Self>(&reader.last().unwrap().unwrap()).unwrap()
-	}
-
-	fn into_vec(self) -> Vec<u8> {
-		compress(self.into_avro())
-	}
-
-	fn from_vec(dat: Vec<u8>) -> Self {
-		Self::from_avro(decompress(dat))
-	}
-
-	fn from_outer(outer_db: OuterAvroDatabase, master_key: [u8; KEY_SIZE]) -> Self {
-		let nonce = outer_db.get_nonce();
-		let public_kv = outer_db.public_kv.clone();
-		let db64 = to_base64(&encrypt(outer_db.into_avro(), master_key, nonce));
-		Self { db64, public_kv }
-	}
-
-	fn into_outer(self, master_key: [u8; KEY_SIZE]) -> OuterAvroDatabase {
-		let nonce = self.get_nonce();
-		OuterAvroDatabase::from_avro(decrypt(from_base64(&self.db64), master_key, nonce).unwrap())
-	}
-}
-
-impl OuterAvroDatabase {
-	fn get_nonce(&self) -> [u8; NONCE_SIZE] {
-		parse_nonce_from_kv(&self.public_kv)
-	}
-
-	fn into_avro(self) -> Vec<u8> {
-		use apache_avro::{to_value, Schema, Writer};
-		let schema = Schema::parse_str(OUTER_AVRO_SCHEMA).unwrap();
-		let mut writer = Writer::new(&schema, Vec::new());
-		writer.append(to_value(self).unwrap()).unwrap();
-		writer.into_inner().unwrap()
-	}
-
-	fn from_avro(avro_dat: Vec<u8>) -> Self {
-		use apache_avro::{from_value, Reader};
-		let reader = Reader::new(&avro_dat[..]).unwrap();
-		from_value::<Self>(&reader.last().unwrap().unwrap()).unwrap()
-	}
-
-	fn into_inner(self, master_key: [u8; KEY_SIZE]) -> InnerAvroDatabase {
-		InnerAvroDatabase::from_outer(self, master_key)
-	}
-
-	fn from_inner(inner_db: InnerAvroDatabase, master_key: [u8; KEY_SIZE]) -> Self {
-		inner_db.into_outer(master_key)
-	}
-
-	fn into_volatile(self, master_key: [u8; KEY_SIZE]) -> volatile::Database {
-		let private_kv = Arc::new(RwLock::new(self.private_kv.clone()));
-		let public_kv = Arc::new(RwLock::new(self.public_kv.clone()));
-		volatile::Database::old(master_key, private_kv, public_kv)
-	}
-
-	fn from_volatile(volatile_db: &volatile::Database) -> Self {
-		let public_kv = volatile_db.public_kv.read().unwrap().clone();
-		let mut private_kv = BTreeMap::new();
-		for (key, encrypted_value) in volatile_db.private_kv.read().unwrap().iter() {
-			let value =
-				String::from_utf8(encrypted_value.decrypt().unwrap().as_ref().to_vec()).unwrap();
-			private_kv.insert(key.to_string(), value);
-		}
-		Self {
-			private_kv,
-			public_kv,
-		}
-	}
-}
-
-impl Drop for OuterAvroDatabase {
-	fn drop(&mut self) {
-		for (mut key, mut value) in mem::take(&mut self.private_kv).into_iter() {
-			value.zeroize();
-			key.zeroize();
-		}
-	}
-}
-
-fn parse_nonce_from_kv(kv: &BTreeMap<String, String>) -> [u8; NONCE_SIZE] {
-	let pre_nonce = kv.get("nonce").unwrap().parse::<u128>().unwrap();
-	let mut nonce = [0u8; NONCE_SIZE];
-	nonce[..16].copy_from_slice(&pre_nonce.to_le_bytes());
-	nonce
-}
 
 fn base_path() -> PathBuf {
 	let mut apath = env::home_dir().unwrap_or_default();
@@ -176,41 +39,76 @@ fn pepper_path() -> String {
 	apath.to_str().unwrap().to_string()
 }
 
-pub fn load(db_name: String, master_password: String) -> volatile::Database {
+pub fn load(db_name: String, master_password: String) -> Database {
 	let path = db_path(&db_name);
 	if path.exists() {
-		let dat = from_erasure_file(&db_name);
-		let inner_db = InnerAvroDatabase::from_vec(dat);
-		let digisalt: [u8; KEY_SIZE] = hex::decode(inner_db.public_kv.get("digisalt").unwrap())
+		let db_outer_bin = from_erasure_file(&db_name);
+		let db_outer = InteriorDatabase::deserialize(&db_outer_bin);
+		let pre_nonce = db_outer
+			.get_meta_entry("nonce")
 			.unwrap()
+			.get_value()
+			.parse::<u128>()
+			.unwrap();
+		let mut nonce = [0u8; NONCE_SIZE];
+		nonce[..16].copy_from_slice(&pre_nonce.to_le_bytes());
+		let salt: [u8; 32] = from_base64(db_outer.get_meta_entry("salt").unwrap().get_value())
 			.try_into()
 			.unwrap();
-		let master_key = master_key_derivation(master_password, digisalt);
-		let outer_db = OuterAvroDatabase::from_inner(inner_db, master_key);
-		outer_db.into_volatile(master_key)
+		let master_key = master_key_derivation(master_password, salt);
+		let db_encrypted_bin = from_base64(db_outer.get_meta_entry("db").unwrap().get_value());
+		let db_compressed_bin = decrypt(db_encrypted_bin, &master_key, nonce).unwrap();
+		let db_bin = decompress(db_compressed_bin);
+		let db_inner = InteriorDatabase::deserialize(&db_bin);
+		Database::old(master_key, db_inner)
 	} else {
-		let mut digisalt = [0u8; KEY_SIZE];
-		getrandom::fill(&mut digisalt).unwrap();
-		let master_key = master_key_derivation(master_password, digisalt);
-		volatile::Database::new(master_key, digisalt, db_name)
+		let created_ts = SystemTime::now()
+			.duration_since(SystemTime::UNIX_EPOCH)
+			.unwrap()
+			.as_secs()
+			.to_string();
+		let mut salt = [0u8; KEY_SIZE];
+		getrandom::fill(&mut salt).unwrap();
+		let master_key = master_key_derivation(master_password, salt);
+		let db = Database::new(master_key);
+		db.set_meta_entry(MetaEntry::new("db_name", &db_name));
+		db.set_meta_entry(MetaEntry::new("nonce", "0"));
+		db.set_meta_entry(MetaEntry::new("salt", &to_base64(&salt)));
+		db.set_meta_entry(MetaEntry::new("created_ts", &created_ts));
+		db.set_meta_entry(MetaEntry::new("modified_ts", &created_ts));
+		db
 	}
 }
 
-pub fn save(db: volatile::Database) -> String {
+pub fn save(db: Database) -> String {
+	let db_name = db
+		.get_meta_entry("db_name")
+		.unwrap()
+		.get_value()
+		.to_string();
 	let modified_ts = SystemTime::now()
 		.duration_since(SystemTime::UNIX_EPOCH)
 		.unwrap()
 		.as_secs()
 		.to_string();
-	db.set_public("modified_ts".to_string(), modified_ts);
-	let nonce = db.get_public("nonce").unwrap().parse::<u128>().unwrap() + 1;
-	db.set_public("nonce".to_string(), nonce.to_string());
-	let master_key = db.master_key.read().unwrap().decrypt().unwrap();
-	let outer_db = OuterAvroDatabase::from_volatile(&db);
-	let inner_db = outer_db.into_inner(master_key.as_ref().try_into().unwrap());
-	let db_name = db.public_kv.read().unwrap().get("db_name").unwrap().clone();
-	let dat = inner_db.into_vec();
-	into_erasure_file(dat, &db_name);
+	db.set_meta_entry(MetaEntry::new("modified_ts", &modified_ts));
+	let num_nonce =
+		db.get_meta_entry("nonce")
+			.unwrap()
+			.get_value()
+			.parse::<u128>()
+			.unwrap() + 1;
+	let mut nonce = [0u8; NONCE_SIZE];
+	nonce[..16].copy_from_slice(&num_nonce.to_le_bytes());
+	db.set_meta_entry(MetaEntry::new("nonce", &num_nonce.to_string()));
+	let inner_db = db.serialize();
+	let inner_compressed = compress(inner_db.to_vec());
+	let master_key = db.master_key.read().unwrap();
+	let inner_encrypted = encrypt(inner_compressed, &master_key, nonce);
+	let outer_db = db.meta_only();
+	outer_db.set_meta_entry(MetaEntry::new("db", &to_base64(&inner_encrypted)));
+	let db_bin = outer_db.serialize();
+	into_erasure_file(db_bin.to_vec(), &db_name);
 	"Database saved.".to_string()
 }
 
@@ -229,7 +127,7 @@ fn load_pepper() -> [u8; KEY_SIZE] {
 	pepper
 }
 
-fn master_key_derivation(password: String, salt: [u8; KEY_SIZE]) -> [u8; KEY_SIZE] {
+fn master_key_derivation(password: String, salt: [u8; KEY_SIZE]) -> SecretMemory {
 	use argon2::{Algorithm, Argon2, ParamsBuilder, Version};
 	use sha3::{Digest, Sha3_256};
 	let password = Zeroizing::new(password);
@@ -240,7 +138,8 @@ fn master_key_derivation(password: String, salt: [u8; KEY_SIZE]) -> [u8; KEY_SIZ
 	pre_hasher.update(password.as_bytes());
 	let mut pre_hash = pre_hasher.finalize();
 	let main_params = ParamsBuilder::new()
-		.m_cost(2u32.pow(22))
+		//.m_cost(2u32.pow(22))
+		.m_cost(2u32.pow(12))
 		.t_cost(1)
 		.p_cost(1)
 		.output_len(KEY_SIZE)
@@ -259,12 +158,15 @@ fn master_key_derivation(password: String, salt: [u8; KEY_SIZE]) -> [u8; KEY_SIZ
 	post_hasher.update(main_hash);
 	post_hasher.update(pepper);
 	post_hasher.update(salt);
-	let post_hash: [u8; KEY_SIZE] = post_hasher.finalize().into();
+	let mut post_hash: [u8; KEY_SIZE] = post_hasher.finalize().into();
 	let mut pepper = pepper;
 	pepper.zeroize();
 	pre_hash.zeroize();
 	main_hash.zeroize();
-	post_hash
+	let master_key = SecretMemory::new_pages(1).unwrap();
+	master_key.write(0, &post_hash).unwrap();
+	post_hash.zeroize();
+	master_key
 }
 
 fn to_base64(msg: &[u8]) -> String {
@@ -297,21 +199,25 @@ fn decompress(msg_enc: Vec<u8>) -> Vec<u8> {
 const KEY_SIZE: usize = 32;
 const NONCE_SIZE: usize = 24;
 
-fn encrypt(msg: Vec<u8>, key: [u8; KEY_SIZE], nonce: [u8; NONCE_SIZE]) -> Vec<u8> {
+fn encrypt(msg: Vec<u8>, key: &SecretMemory, nonce: [u8; NONCE_SIZE]) -> Vec<u8> {
 	use chacha20poly1305::{
 		aead::{Aead, KeyInit},
 		XChaCha20Poly1305,
 	};
+	let mut key: [u8; 32] = key.read().unwrap().to_vec().try_into().unwrap();
 	let cipher = XChaCha20Poly1305::new(&key.into());
+	key.zeroize();
 	cipher.encrypt(&nonce.into(), &msg[..]).unwrap()
 }
 
-fn decrypt(msg_enc: Vec<u8>, key: [u8; KEY_SIZE], nonce: [u8; NONCE_SIZE]) -> Option<Vec<u8>> {
+fn decrypt(msg_enc: Vec<u8>, key: &SecretMemory, nonce: [u8; NONCE_SIZE]) -> Option<Vec<u8>> {
 	use chacha20poly1305::{
 		aead::{Aead, KeyInit},
 		XChaCha20Poly1305,
 	};
+	let mut key: [u8; 32] = key.read().unwrap().to_vec().try_into().unwrap();
 	let cipher = XChaCha20Poly1305::new(&key.into());
+	key.zeroize();
 	cipher.decrypt(&nonce.into(), msg_enc.as_ref()).ok()
 }
 

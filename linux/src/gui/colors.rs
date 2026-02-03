@@ -9,9 +9,13 @@ pub const BG_BUTTON: Color = rgb(8, 8, 16);
 pub const BG_BUTTON_HOVER: Color = rgb(16, 16, 32);
 
 pub const BORDER_PRIMARY: Color = rgb(60, 8, 100);
-pub const BORDER_SECONDARY: Color = rgb(24, 64, 24);
+pub const BORDER_SECONDARY: Color = rgb(32, 80, 32);
 pub const BORDER_ACCENT: Color = rgb(110, 10, 240);
 pub const BORDER_HOVER: Color = rgb(80, 8, 140);
+
+pub const BORDER_PRIMARY_QUERY: Color = rgb(80, 140, 80);
+pub const BORDER_ACCENT_QUERY: Color = rgb(80, 180, 80);
+pub const BORDER_HOVER_QUERY: Color = rgb(60, 140, 60);
 
 pub const TEXT_PRIMARY: Color = rgb(230, 230, 230);
 pub const TEXT_SECONDARY: Color = rgb(200, 180, 200);
