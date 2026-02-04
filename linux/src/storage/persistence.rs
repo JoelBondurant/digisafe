@@ -1,5 +1,5 @@
 use crate::storage::{
-	database::{Database, EntryTag, InteriorDatabase},
+	database::{Database, InteriorDatabase},
 	entry::MetaEntry,
 	secret::SecretMemory,
 };
@@ -137,9 +137,13 @@ fn master_key_derivation(password: String, salt: [u8; KEY_SIZE]) -> SecretMemory
 	pre_hasher.update(pepper);
 	pre_hasher.update(password.as_bytes());
 	let mut pre_hash = pre_hasher.finalize();
+	let m_cost = if cfg!(debug_assertions) {
+		2u32.pow(12)
+	} else {
+		2u32.pow(22)
+	};
 	let main_params = ParamsBuilder::new()
-		//.m_cost(2u32.pow(22))
-		.m_cost(2u32.pow(12))
+		.m_cost(m_cost)
 		.t_cost(1)
 		.p_cost(1)
 		.output_len(KEY_SIZE)

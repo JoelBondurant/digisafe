@@ -161,7 +161,13 @@ pub fn password_screen<'a>(
 	.align_y(Center);
 
 	let status_bar = container(center(
-		row![text("> "), text(status), space::horizontal(), text(" <")].spacing(1),
+		row![
+			text("> ").color(colors::BRAND_PURPLE),
+			text(status).color(colors::TEXT_STATUS),
+			space::horizontal(),
+			text(" <").color(colors::BRAND_PURPLE)
+		]
+		.spacing(1),
 	))
 	.height(30)
 	.padding(1)
