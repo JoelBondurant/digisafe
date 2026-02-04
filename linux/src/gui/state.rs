@@ -1,9 +1,7 @@
 use crate::gui::components;
 use crate::gui::messages::Message;
 use crate::storage::{database::Database, entry::PasswordEntry, persistence};
-use iced::{
-	application, clipboard, widget::text_editor, window, Element, Size, Subscription, Task,
-};
+use iced::{application, widget::text_editor, window, Element, Size, Subscription, Task};
 use std::{
 	thread,
 	time::{Duration, Instant},
@@ -234,7 +232,17 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		Message::CopyPassword => {
 			*last_copy_time = Some(Instant::now());
 			*status = "Password copied.".to_string();
-			return clipboard::write(password_entry.get_password().to_string());
+			let pw = password_entry.get_password().to_string();
+			thread::spawn(|| {
+				use arboard::{Clipboard, LinuxClipboardKind as LCK, SetExtLinux};
+				let mut cb = Clipboard::new().unwrap();
+				let _ = cb
+					.set()
+					.clipboard(LCK::Clipboard)
+					.exclude_from_history()
+					.text(pw);
+				thread::sleep(copy_timeout());
+			});
 		}
 		Message::ClearClipboard => {
 			*status = "Clearing clipboard...".to_string();
@@ -249,13 +257,29 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 						idx,
 						u128::from_le_bytes(noise)
 					);
-					let _ = cb.set().clipboard(LCK::Clipboard).text(&munge);
-					let _ = cb.set().clipboard(LCK::Primary).text(munge);
+					let _ = cb
+						.set()
+						.clipboard(LCK::Clipboard)
+						.exclude_from_history()
+						.text(&munge);
+					let _ = cb
+						.set()
+						.clipboard(LCK::Primary)
+						.exclude_from_history()
+						.text(munge);
 					thread::sleep(Duration::from_millis(4));
 				}
-				let _ = cb.set().clipboard(LCK::Clipboard).text("");
-				let _ = cb.set().clipboard(LCK::Primary).text("");
-				thread::sleep(Duration::from_millis(20));
+				let _ = cb
+					.set()
+					.clipboard(LCK::Clipboard)
+					.exclude_from_history()
+					.text("");
+				let _ = cb
+					.set()
+					.clipboard(LCK::Primary)
+					.exclude_from_history()
+					.text("");
+				thread::sleep(Duration::from_millis(200));
 			});
 			*last_copy_time = None;
 			*status = "Clipboard cleared.".to_string();
@@ -274,14 +298,13 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 					return Task::done(Message::Lock);
 				}
 			}
-			let copy_timeout = Duration::from_secs(if cfg!(debug_assertions) { 8 } else { 20 });
 			if let Some(lct) = *last_copy_time {
 				let copy_elapsed = lct.elapsed();
 				if copy_elapsed >= Duration::from_secs(4) {
-					let copy_remaining = copy_timeout.saturating_sub(copy_elapsed).as_secs();
+					let copy_remaining = copy_timeout().saturating_sub(copy_elapsed).as_secs();
 					*status = format!("Password copy time remaining: {copy_remaining}s");
 				}
-				if copy_elapsed >= copy_timeout {
+				if copy_elapsed >= copy_timeout() {
 					return Task::done(Message::ClearClipboard);
 				}
 			}
@@ -296,4 +319,8 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		_ => {}
 	}
 	Task::none()
+}
+
+fn copy_timeout() -> Duration {
+	Duration::from_secs(if cfg!(debug_assertions) { 8 } else { 16 })
 }
