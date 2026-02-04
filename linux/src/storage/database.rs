@@ -4,7 +4,7 @@ use crate::storage::{
 	atlas::{EntryAtlas, FieldAtlas},
 	entry::{MetaEntry, PasswordEntry}, secret::SecretMemory,
 };
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 
 #[derive(Debug)]
@@ -63,6 +63,10 @@ impl Database {
 			db: Arc::new(RwLock::new(InteriorDatabase::from_entry_atlas(meta))),
 			master_key: Arc::clone(&self.master_key),
 		}
+	}
+	pub fn zeroize(&self) {
+		let _ = self.master_key.write().unwrap().zeroize();
+		self.db.write().unwrap().zeroize();
 	}
 }
 
@@ -142,5 +146,14 @@ impl InteriorDatabase {
 			}
 		}
 		db
+	}
+	pub fn zeroize(&mut self) {
+		for (_, value) in self.entries.entries.values_mut() {
+			value.zeroize();
+		}
+		let index_by_name = mem::take(&mut self.index_by_name);
+		for (mut key, _) in index_by_name {
+			key.zeroize();
+		}
 	}
 }

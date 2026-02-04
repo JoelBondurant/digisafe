@@ -10,6 +10,7 @@ pub enum Message {
 	DbNameChanged(String),
 	DbPasswordChanged(String),
 	DragWindow,
+	Lock,
 	PasswordEntryGet,
 	PasswordEntryNameInput(String),
 	PasswordEntryNoteAction(text_editor::Action),
