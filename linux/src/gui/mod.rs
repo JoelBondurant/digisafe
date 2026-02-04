@@ -8,7 +8,7 @@ use iced::{
 };
 use messages::Message;
 use std::{
-	process::Command,
+	thread,
 	time::{Duration, Instant},
 };
 
@@ -193,11 +193,25 @@ impl State {
 				Message::ClearClipboard => {
 					*status = "Clearing clipboard...".to_string();
 					*last_copy_time = None;
-					for idx in 0..60 {
-						let munge = format!("SCORTCHED_EARTH_{:099}", idx);
-						let _ = Command::new("wl-copy").arg(munge).status();
-					}
-					let _ = Command::new("wl-copy").arg("--clear").status();
+					thread::spawn(|| {
+						use arboard::{Clipboard, LinuxClipboardKind as LCK, SetExtLinux};
+						let mut cb = Clipboard::new().unwrap();
+						for idx in 0..60 {
+							let mut noise = [0u8; 16];
+							getrandom::fill(&mut noise).unwrap();
+							let munge = format!(
+								"SCORTCHED_EARTH_{:03}_{:040}",
+								idx,
+								u128::from_le_bytes(noise)
+							);
+							let _ = cb.set().clipboard(LCK::Clipboard).text(&munge);
+							let _ = cb.set().clipboard(LCK::Primary).text(munge);
+							thread::sleep(Duration::from_millis(4));
+						}
+						let _ = cb.set().clipboard(LCK::Clipboard).text("");
+						let _ = cb.set().clipboard(LCK::Primary).text("");
+						thread::sleep(Duration::from_millis(20));
+					});
 					*status = "Clipboard cleared.".to_string();
 				}
 				Message::Tick => {
