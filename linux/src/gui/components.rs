@@ -124,6 +124,7 @@ pub fn unlock_screen<'a>(
 pub fn password_screen<'a>(
 	query: &str,
 	password_entry: &PasswordEntry,
+	is_password_visible: &bool,
 	note: &'a text_editor::Content,
 	status: &'a str,
 ) -> Element<'a, Message> {
@@ -138,13 +139,28 @@ pub fn password_screen<'a>(
 		.on_input(Message::PasswordEntryUsernameInput)
 		.on_submit(Message::PasswordEntrySet);
 	let password_input = styled_text_input("password", password_entry.get_password())
-		.secure(true)
+		.secure(!is_password_visible)
 		.on_input(Message::PasswordEntryPasswordInput)
 		.on_submit(Message::PasswordEntrySet);
+	let password_visibility_toggle = styled_button(
+		if *is_password_visible { "Hide" } else { "Show" },
+		Message::TogglePasswordVisibility,
+	);
+	let password_copy_btn = styled_button("Copy", Message::CopyPassword);
 	let note_editor =
 		styled_text_editor("note".into(), note).on_action(Message::PasswordEntryNoteAction);
 	let main_content = container(center(
-		column![name_input, username_input, password_input, note_editor,].spacing(4),
+		column![
+			name_input,
+			username_input,
+			row![
+				password_input,
+				password_copy_btn,
+				password_visibility_toggle
+			],
+			note_editor,
+		]
+		.spacing(4),
 	))
 	.padding(4)
 	.width(Fill);

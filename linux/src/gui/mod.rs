@@ -3,8 +3,14 @@ pub mod components;
 pub mod messages;
 
 use crate::storage::{database::Database, entry::PasswordEntry, persistence};
-use iced::{application, widget::text_editor, window, Element, Size, Task};
+use iced::{
+	application, clipboard, widget::text_editor, window, Element, Size, Subscription, Task,
+};
 use messages::Message;
+use std::{
+	process::Command,
+	time::{Duration, Instant},
+};
 
 enum AppState {
 	Locked {
@@ -15,6 +21,8 @@ enum AppState {
 	Unlocked {
 		query: String,
 		password_entry: PasswordEntry,
+		is_password_visible: bool,
+		last_copy_time: Option<Instant>,
 		note: text_editor::Content,
 		status: String,
 		db: Database,
@@ -31,6 +39,7 @@ pub type Result = iced::Result;
 
 pub fn run() -> Result {
 	application(State::new, State::update, State::view)
+		.subscription(State::subscription)
 		.theme(components::theme())
 		.title(APP_NAME)
 		.window(window::Settings {
@@ -74,6 +83,8 @@ impl State {
 					self.app_state = AppState::Unlocked {
 						query: "".into(),
 						password_entry: PasswordEntry::default(),
+						is_password_visible: false,
+						last_copy_time: None,
 						note: text_editor::Content::new(),
 						status: "Unlocked".into(),
 						db,
@@ -96,6 +107,8 @@ impl State {
 			AppState::Unlocked {
 				query,
 				password_entry,
+				is_password_visible,
+				last_copy_time,
 				note,
 				status,
 				db,
@@ -169,10 +182,49 @@ impl State {
 				Message::DragWindow => {
 					return window::latest().and_then(window::drag);
 				}
+				Message::TogglePasswordVisibility => {
+					*is_password_visible = !*is_password_visible;
+				}
+				Message::CopyPassword => {
+					*last_copy_time = Some(Instant::now());
+					*status = "Password copied.".to_string();
+					return clipboard::write(password_entry.get_password().to_string());
+				}
+				Message::ClearClipboard => {
+					*status = "Clearing clipboard...".to_string();
+					*last_copy_time = None;
+					for idx in 0..60 {
+						let munge = format!("SCORTCHED_EARTH_{:099}", idx);
+						let _ = Command::new("wl-copy").arg(munge).status();
+					}
+					let _ = Command::new("wl-copy").arg("--clear").status();
+					*status = "Clipboard cleared.".to_string();
+				}
+				Message::Tick => {
+					let timeout = Duration::from_secs(if cfg!(debug_assertions) { 8 } else { 20 });
+					if let Some(copied_at) = *last_copy_time {
+						let elapsed = copied_at.elapsed();
+						if elapsed >= Duration::from_secs(4) {
+							let remaining = timeout.saturating_sub(elapsed).as_secs();
+							*status = format!("Password copy time remaining: {remaining}s");
+						}
+						if elapsed >= timeout {
+							return Task::done(Message::ClearClipboard);
+						}
+					}
+				}
 				_ => {}
 			},
 		}
 		Task::none()
+	}
+
+	fn subscription(&self) -> Subscription<Message> {
+		if let AppState::Unlocked { .. } = &self.app_state {
+			iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick)
+		} else {
+			Subscription::none()
+		}
 	}
 
 	fn view(&self) -> Element<'_, Message> {
@@ -185,10 +237,18 @@ impl State {
 			AppState::Unlocked {
 				query,
 				password_entry,
+				is_password_visible,
+				last_copy_time: _,
 				note,
 				status,
 				db: _,
-			} => components::password_screen(query, password_entry, note, status),
+			} => components::password_screen(
+				query,
+				password_entry,
+				is_password_visible,
+				note,
+				status,
+			),
 		}
 	}
 }
