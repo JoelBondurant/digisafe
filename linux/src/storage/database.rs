@@ -1,9 +1,8 @@
-use std::{collections::BTreeMap, mem, sync::{Arc, RwLock}};
-
 use crate::storage::{
 	atlas::{EntryAtlas, FieldAtlas},
 	entry::{MetaEntry, PasswordEntry}, secret::SecretMemory,
 };
+use std::{collections::BTreeMap, mem, sync::{Arc, RwLock}};
 use zeroize::{Zeroize, Zeroizing};
 
 
