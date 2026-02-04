@@ -2,7 +2,7 @@ use crate::storage::{
 	atlas::{EntryAtlas, FieldAtlas},
 	entry::{MetaEntry, PasswordEntry}, secret::SecretMemory,
 };
-use std::{collections::BTreeMap, mem, sync::{Arc, RwLock}};
+use std::{collections::BTreeMap, mem, sync::{Arc, RwLock, RwLockReadGuard}};
 use zeroize::{Zeroize, Zeroizing};
 
 
@@ -16,7 +16,7 @@ pub enum EntryTag {
 #[derive(Clone)]
 pub struct Database {
 	db: Arc<RwLock<InteriorDatabase>>,
-	pub master_key: Arc<RwLock<SecretMemory>>,
+	master_key: Arc<RwLock<SecretMemory>>,
 }
 
 impl Database {
@@ -62,6 +62,9 @@ impl Database {
 			db: Arc::new(RwLock::new(InteriorDatabase::from_entry_atlas(meta))),
 			master_key: Arc::clone(&self.master_key),
 		}
+	}
+	pub fn read_master_key<'a>(&'a self) -> RwLockReadGuard<'a, SecretMemory> {
+		self.master_key.read().unwrap()
 	}
 	pub fn zeroize(&self) {
 		let _ = self.master_key.write().unwrap().zeroize();

@@ -102,8 +102,7 @@ pub fn save(db: Database) -> String {
 	db.set_meta_entry(MetaEntry::new("nonce", &num_nonce.to_string()));
 	let inner_db = db.serialize();
 	let inner_compressed = compress(inner_db.to_vec());
-	let master_key = db.master_key.read().unwrap();
-	let inner_encrypted = encrypt(inner_compressed, &master_key, nonce);
+	let inner_encrypted = encrypt(inner_compressed, &db.read_master_key(), nonce);
 	let outer_db = db.meta_only();
 	outer_db.set_meta_entry(MetaEntry::new("db", &to_base64(&inner_encrypted)));
 	let db_bin = outer_db.serialize();
