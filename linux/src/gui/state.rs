@@ -106,7 +106,7 @@ fn update_locked(message: Message, app_state: &mut AppState) -> Task<Message> {
 			let db_name_clone = db_name.clone();
 			let db_password_clone = db_password.clone();
 			return Task::perform(
-				async move { persistence::load(db_name_clone, db_password_clone) },
+				async move { persistence::load(&db_name_clone, db_password_clone).await },
 				Message::UnlockResult,
 			);
 		}
@@ -211,9 +211,10 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 			}
 		}
 		Message::Save => {
+			*status = "Saving Database...".to_string();
 			let db_clone = db.clone();
 			return Task::perform(
-				async move { persistence::save(db_clone) },
+				async move { persistence::save(&db_clone).await },
 				Message::SaveResult,
 			);
 		}

@@ -2,6 +2,7 @@
 name = "digisafe"
 version = "0.2.0"
 edition = "2024"
+resolver = "3"
 
 [dependencies]
 arboard = { version = "3.6.1", features = ["wayland-data-control"] }
@@ -15,7 +16,9 @@ iced = { version = "0.14", default-features = false, features = ["advanced", "ca
 libc = "0.2.180"
 lz4 = "1.28.1"
 reed-solomon-erasure = { version = "6.0.0", features = ["simd-accel"] }
-serde = { version = "1.0.228", features = ["derive"] }
+reqwest = { version = "0.13.1", default-featrues = false, features = ["charset", "rustls", "json"] }
+serde_json = "1.0.149"
+sha1 = "0.10.6"
 sha3 = "0.10.8"
 tiny-skia = "0.12.0"
 zeroize = "1.8.2"

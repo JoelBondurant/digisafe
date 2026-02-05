@@ -2,7 +2,7 @@ use crate::storage::{
 	atlas::{EntryAtlas, FieldAtlas},
 	entry::{MetaEntry, PasswordEntry}, secret::SecretMemory,
 };
-use std::{collections::BTreeMap, mem, sync::{Arc, RwLock, RwLockReadGuard}};
+use std::{collections::BTreeMap, mem, sync::{Arc, RwLock}};
 use zeroize::{Zeroize, Zeroizing};
 
 
@@ -15,43 +15,43 @@ pub enum EntryTag {
 
 #[derive(Clone)]
 pub struct Database {
-	db: Arc<RwLock<InteriorDatabase>>,
+	idb: Arc<RwLock<InteriorDatabase>>,
 	master_key: Arc<RwLock<SecretMemory>>,
 }
 
 impl Database {
 	pub fn new(master_key: SecretMemory) -> Self {
-		let db = InteriorDatabase::default();
+		let idb = InteriorDatabase::default();
 		Self {
-			db: Arc::new(RwLock::new(db)),
+			idb: Arc::new(RwLock::new(idb)),
 			master_key: Arc::new(RwLock::new(master_key)),
 		}
 	}
-	pub fn old(master_key: SecretMemory, db: InteriorDatabase) -> Self {
+	pub fn old(master_key: SecretMemory, idb: InteriorDatabase) -> Self {
 		Self {
-			db: Arc::new(RwLock::new(db)),
+			idb: Arc::new(RwLock::new(idb)),
 			master_key: Arc::new(RwLock::new(master_key)),
 		}
 	}
 	pub fn set_password_entry(&self, entry: PasswordEntry) {
-		self.db.write().unwrap().set_password_entry(entry);
+		self.idb.write().unwrap().set_password_entry(entry);
 	}
 	pub fn get_password_entry(&self, name: &str) -> Option<PasswordEntry> {
-		self.db.read().unwrap().get_password_entry(name)
+		self.idb.read().unwrap().get_password_entry(name)
 	}
 	pub fn set_meta_entry(&self, entry: MetaEntry) {
-		self.db.write().unwrap().set_meta_entry(entry);
+		self.idb.write().unwrap().set_meta_entry(entry);
 	}
 	pub fn get_meta_entry(&self, name: &str) -> Option<MetaEntry> {
-		self.db.read().unwrap().get_meta_entry(name)
+		self.idb.read().unwrap().get_meta_entry(name)
 	}
 	pub fn serialize(&self) -> Zeroizing<Vec<u8>> {
-		self.db.read().unwrap().serialize()
+		self.idb.read().unwrap().serialize()
 	}
 	pub fn meta_only(&self) -> Self {
 		let mut meta = EntryAtlas::default();
 		let mut idx = 1u32;
-		for (entry_tag, entry_data) in self.db.read().unwrap().entries.entries.values() {
+		for (entry_tag, entry_data) in self.idb.read().unwrap().entries.entries.values() {
 			let entry_tag = unsafe { mem::transmute::<u8, EntryTag>(*entry_tag) };
 			if let EntryTag::Meta = entry_tag {
 				meta.set(idx, entry_tag as u8, entry_data.to_vec());
@@ -59,16 +59,16 @@ impl Database {
 			}
 		}
 		Self {
-			db: Arc::new(RwLock::new(InteriorDatabase::from_entry_atlas(meta))),
+			idb: Arc::new(RwLock::new(InteriorDatabase::from_entry_atlas(meta))),
 			master_key: Arc::clone(&self.master_key),
 		}
 	}
-	pub fn read_master_key<'a>(&'a self) -> RwLockReadGuard<'a, SecretMemory> {
-		self.master_key.read().unwrap()
+	pub fn clone_master_key(&self) -> Arc<RwLock<SecretMemory>> {
+		self.master_key.clone()
 	}
 	pub fn zeroize(&self) {
 		let _ = self.master_key.write().unwrap().zeroize();
-		self.db.write().unwrap().zeroize();
+		self.idb.write().unwrap().zeroize();
 	}
 }
 
