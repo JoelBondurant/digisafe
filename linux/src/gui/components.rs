@@ -1,13 +1,12 @@
 use crate::gui::messages::Message;
 use crate::{gui::colors, storage::entry::PasswordEntry};
-
 use iced::{
 	advanced::text::highlighter::PlainText,
 	border, font,
 	theme::{Palette, Theme},
 	widget::{
 		button, center, column, container, mouse_area, row, space, text, text_editor, text_input,
-		TextEditor, TextInput,
+		tooltip, TextEditor, TextInput, Tooltip,
 	},
 	Alignment, Background, Center, Color, Element, Fill, Font,
 };
@@ -124,6 +123,20 @@ pub fn unlock_screen<'a>(
 	column![title_bar(), unlock_panel].into()
 }
 
+fn styled_tooltip<'a, Message>(
+	underlay: impl Into<Element<'a, Message>>,
+	label: &'a str,
+) -> Tooltip<'a, Message>
+where
+	Message: 'a,
+{
+	tooltip(
+		underlay,
+		container(text(label.to_string()).color(colors::BRAND_GREEN).size(18)).padding(10),
+		tooltip::Position::Right,
+	)
+}
+
 pub fn password_screen<'a>(
 	query: &str,
 	password_entry: &PasswordEntry,
@@ -131,20 +144,32 @@ pub fn password_screen<'a>(
 	note: &'a text_editor::Content,
 	status: &'a str,
 ) -> Element<'a, Message> {
-	let query_input = styled_query_input("query...", query)
-		.on_input(Message::QueryInput)
-		.on_submit(Message::QuerySubmit);
+	let query_input = styled_tooltip(
+		styled_query_input("query...", query)
+			.on_input(Message::QueryInput)
+			.on_submit(Message::QuerySubmit),
+		"Query  ",
+	);
 	let header = container(column![query_input]).padding(8).width(Fill);
-	let name_input = styled_text_input("name", password_entry.get_name())
-		.on_input(Message::PasswordEntryNameInput)
-		.on_submit(Message::PasswordEntrySet);
-	let username_input = styled_text_input("username", password_entry.get_username())
-		.on_input(Message::PasswordEntryUsernameInput)
-		.on_submit(Message::PasswordEntrySet);
-	let password_input = styled_text_input("password", password_entry.get_password())
-		.secure(!is_password_visible)
-		.on_input(Message::PasswordEntryPasswordInput)
-		.on_submit(Message::PasswordEntrySet);
+	let name_input = styled_tooltip(
+		styled_text_input("name", password_entry.get_name())
+			.on_input(Message::PasswordEntryNameInput)
+			.on_submit(Message::PasswordEntrySet),
+		"Name  ",
+	);
+	let username_input = styled_tooltip(
+		styled_text_input("username", password_entry.get_username())
+			.on_input(Message::PasswordEntryUsernameInput)
+			.on_submit(Message::PasswordEntrySet),
+		"Username  ",
+	);
+	let password_input = styled_tooltip(
+		styled_text_input("password", password_entry.get_password())
+			.secure(!is_password_visible)
+			.on_input(Message::PasswordEntryPasswordInput)
+			.on_submit(Message::PasswordEntrySet),
+		"Password                    ",
+	);
 	let mini_button_size = (44, 44);
 	let password_copy_button = styled_button("📋", Message::CopyPassword, mini_button_size);
 	let password_visibility_toggle = styled_button(
@@ -152,14 +177,22 @@ pub fn password_screen<'a>(
 		Message::TogglePasswordVisibility,
 		mini_button_size,
 	);
-	let url_input = styled_text_input("url", password_entry.get_url())
-		.on_input(Message::PasswordEntryUrlInput)
-		.on_submit(Message::PasswordEntrySet);
-	let tags_input = styled_text_input("tags", password_entry.get_tags())
-		.on_input(Message::PasswordEntryTagsInput)
-		.on_submit(Message::PasswordEntrySet);
-	let note_editor =
-		styled_text_editor("note".into(), note).on_action(Message::PasswordEntryNoteAction);
+	let url_input = styled_tooltip(
+		styled_text_input("url", password_entry.get_url())
+			.on_input(Message::PasswordEntryUrlInput)
+			.on_submit(Message::PasswordEntrySet),
+		"URL  ",
+	);
+	let tags_input = styled_tooltip(
+		styled_text_input("tags", password_entry.get_tags())
+			.on_input(Message::PasswordEntryTagsInput)
+			.on_submit(Message::PasswordEntrySet),
+		"Tags  ",
+	);
+	let note_editor = styled_tooltip(
+		styled_text_editor("note".into(), note).on_action(Message::PasswordEntryNoteAction),
+		"Note  ",
+	);
 	let main_content = container(center(
 		column![
 			name_input,
