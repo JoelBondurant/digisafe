@@ -3,6 +3,19 @@ name = "digisafe"
 version = "0.2.0"
 edition = "2024"
 resolver = "3"
+authors = ["Joel Bondurant"]
+description = "A digital safe for secure storage."
+
+[package.metadata.deb]
+maintainer = "Joel Bondurant"
+copyright = "2026, Joel Bondurant"
+license-file = ["../LICENSE", "0"]
+assets = [
+    ["target/release/digisafe", "/usr/bin/digisafe", "755"],
+    ["digisafe.png", "/usr/share/pixmaps/digisafe.png", "644"],
+    ["digisafe.desktop", "/usr/share/applications/digisafe.desktop", "644"],
+]
+depends = "argon2, systemd"
 
 [dependencies]
 arboard = { version = "3.6.1", features = ["wayland-data-control"] }
