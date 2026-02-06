@@ -1,0 +1,9 @@
+[Desktop Entry]
+Exec=/usr/local/bin/digisafe/digisafe
+Icon=/usr/local/bin/digisafe/digisafe.png
+Name=DigiSafe
+GenericName=DigiSafe
+Type=Application
+Terminal=false
+StartupNotify=false
+Type=Application
