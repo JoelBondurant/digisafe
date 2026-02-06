@@ -1,5 +1,4 @@
-use crate::gui::components;
-use crate::gui::messages::Message;
+use crate::gui::{components, messages::Message};
 use crate::storage::{database::Database, entry::PasswordEntry, persistence};
 use iced::{application, widget::text_editor, window, Element, Size, Subscription, Task};
 use std::{
@@ -30,6 +29,8 @@ enum AppState {
 }
 
 pub const APP_NAME: &str = "DigiSafe";
+const COPY_TIMEOUT: Duration = Duration::from_secs(if cfg!(debug_assertions) { 10 } else { 20 });
+const IDLE_TIMEOUT: Duration = Duration::from_secs(if cfg!(debug_assertions) { 60 } else { 240 });
 
 pub type Result = iced::Result;
 
@@ -153,8 +154,12 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 	else {
 		unreachable!("update_unlocked called with locked state")
 	};
+	const IDLE_MESSAGE: &str = "Idle time remaining:";
 	if !matches!(message, Message::Tick) {
 		*last_interaction_time = Some(Instant::now());
+		if status.starts_with(IDLE_MESSAGE) {
+			*status = "".to_string();
+		}
 	}
 	match message {
 		Message::QueryInput(new_text) => {
@@ -242,7 +247,7 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 					.clipboard(LCK::Clipboard)
 					.exclude_from_history()
 					.text(pw);
-				thread::sleep(copy_timeout());
+				thread::sleep(COPY_TIMEOUT);
 			});
 		}
 		Message::ClearClipboard => {
@@ -254,7 +259,7 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 					let mut noise = [0u8; 16];
 					getrandom::fill(&mut noise).unwrap();
 					let munge = format!(
-						"SCORTCHED_EARTH_{:03}_{:040}",
+						"DIGISAFE_CLIPBOARD_MUNGE_{:03}_{:040}",
 						idx,
 						u128::from_le_bytes(noise)
 					);
@@ -287,30 +292,28 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		}
 		Message::Tick => {
 			if let Some(lit) = last_interaction_time {
-				let idle_timeout =
-					Duration::from_secs(if cfg!(debug_assertions) { 60 } else { 240 });
 				let idle_elapsed = lit.elapsed();
-				let idle_remaining = idle_timeout.saturating_sub(idle_elapsed).as_secs();
-				if idle_remaining <= 10 {
-					*status = format!("Idle time remaining: {idle_remaining}s");
+				let idle_remaining = IDLE_TIMEOUT.saturating_sub(idle_elapsed).as_secs();
+				if idle_remaining <= 20 {
+					*status = format!("{IDLE_MESSAGE} {idle_remaining}s");
 				}
-				if idle_elapsed >= idle_timeout {
-					db.zeroize();
+				if idle_elapsed >= IDLE_TIMEOUT {
 					return Task::done(Message::Lock);
 				}
 			}
 			if let Some(lct) = *last_copy_time {
 				let copy_elapsed = lct.elapsed();
 				if copy_elapsed >= Duration::from_secs(4) {
-					let copy_remaining = copy_timeout().saturating_sub(copy_elapsed).as_secs();
+					let copy_remaining = COPY_TIMEOUT.saturating_sub(copy_elapsed).as_secs();
 					*status = format!("Password copy time remaining: {copy_remaining}s");
 				}
-				if copy_elapsed >= copy_timeout() {
+				if copy_elapsed >= COPY_TIMEOUT {
 					return Task::done(Message::ClearClipboard);
 				}
 			}
 		}
 		Message::Lock => {
+			db.zeroize();
 			*app_state = AppState::Locked(LockedState {
 				db_name: "".into(),
 				db_password: "".into(),
@@ -320,8 +323,4 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		_ => {}
 	}
 	Task::none()
-}
-
-fn copy_timeout() -> Duration {
-	Duration::from_secs(if cfg!(debug_assertions) { 8 } else { 16 })
 }
