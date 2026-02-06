@@ -52,8 +52,8 @@ pub enum PasswordField {
 	Username = 2u8,
 	Password = 3u8,
 	Note = 4u8,
-	//	Url = 5u8,
-	//	Tags = 6u8,
+	Url = 5u8,
+	Tags = 6u8,
 	//	CreatedTimestamp = 7u8,
 	//	ModifiedTimestamp = 8u8,
 }
@@ -82,6 +82,14 @@ impl PasswordEntry {
 		self.field_atlas
 			.set(PasswordField::Password as u8, password.as_bytes().to_vec());
 	}
+	pub fn set_url(&mut self, url: &str) {
+		self.field_atlas
+			.set(PasswordField::Url as u8, url.as_bytes().to_vec());
+	}
+	pub fn set_tags(&mut self, tags: &str) {
+		self.field_atlas
+			.set(PasswordField::Tags as u8, tags.as_bytes().to_vec());
+	}
 	pub fn set_note(&mut self, note: &str) {
 		self.field_atlas
 			.set(PasswordField::Note as u8, note.as_bytes().to_vec());
@@ -99,6 +107,16 @@ impl PasswordEntry {
 	pub fn get_password(&self) -> &str {
 		self.field_atlas
 			.get_str(PasswordField::Password as u8)
+			.unwrap_or_default()
+	}
+	pub fn get_url(&self) -> &str {
+		self.field_atlas
+			.get_str(PasswordField::Url as u8)
+			.unwrap_or_default()
+	}
+	pub fn get_tags(&self) -> &str {
+		self.field_atlas
+			.get_str(PasswordField::Tags as u8)
 			.unwrap_or_default()
 	}
 	pub fn get_note(&self) -> &str {

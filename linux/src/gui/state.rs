@@ -177,6 +177,12 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		Message::PasswordEntryPasswordInput(new_text) => {
 			password_entry.set_password(&new_text);
 		}
+		Message::PasswordEntryUrlInput(new_text) => {
+			password_entry.set_url(&new_text);
+		}
+		Message::PasswordEntryTagsInput(new_text) => {
+			password_entry.set_tags(&new_text);
+		}
 		Message::PasswordEntryNoteAction(action) => {
 			note.perform(action);
 		}
@@ -198,6 +204,8 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 				if let Some(mut old_entry) = db.get_password_entry(name) {
 					old_entry.set_username(password_entry.get_username());
 					old_entry.set_password(password_entry.get_password());
+					old_entry.set_url(password_entry.get_url());
+					old_entry.set_tags(password_entry.get_tags());
 					old_entry.set_note(&note_string);
 					db.set_password_entry(old_entry);
 					*status = "Entry set.".to_string();
@@ -206,6 +214,8 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 					new_entry.set_name(name);
 					new_entry.set_username(password_entry.get_username());
 					new_entry.set_password(password_entry.get_password());
+					new_entry.set_url(password_entry.get_url());
+					new_entry.set_tags(password_entry.get_tags());
 					new_entry.set_note(&note_string);
 					db.set_password_entry(new_entry.clone());
 					*password_entry = new_entry;

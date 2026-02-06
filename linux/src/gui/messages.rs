@@ -16,6 +16,8 @@ pub enum Message {
 	PasswordEntryNoteAction(text_editor::Action),
 	PasswordEntryPasswordInput(String),
 	PasswordEntrySet,
+	PasswordEntryTagsInput(String),
+	PasswordEntryUrlInput(String),
 	PasswordEntryUsernameInput(String),
 	QueryInput(String),
 	QuerySubmit,

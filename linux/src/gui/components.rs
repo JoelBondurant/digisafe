@@ -12,6 +12,8 @@ use iced::{
 	Alignment, Background, Center, Color, Element, Fill, Font,
 };
 
+const DEFAULT_BUTTON_SIZE: (u32, u32) = (120, 40);
+
 pub fn theme() -> Theme {
 	Theme::custom(
 		"BlackHole".to_string(),
@@ -107,7 +109,8 @@ pub fn unlock_screen<'a>(
 				} else {
 					"Unlock"
 				},
-				Message::AttemptUnlock
+				Message::AttemptUnlock,
+				DEFAULT_BUTTON_SIZE,
 			))
 			.height(40),
 			space().height(100),
@@ -142,11 +145,19 @@ pub fn password_screen<'a>(
 		.secure(!is_password_visible)
 		.on_input(Message::PasswordEntryPasswordInput)
 		.on_submit(Message::PasswordEntrySet);
+	let mini_button_size = (44, 44);
+	let password_copy_button = styled_button("📋", Message::CopyPassword, mini_button_size);
 	let password_visibility_toggle = styled_button(
-		if *is_password_visible { "Hide" } else { "Show" },
+		if *is_password_visible { "👀" } else { "👁" },
 		Message::TogglePasswordVisibility,
+		mini_button_size,
 	);
-	let password_copy_btn = styled_button("Copy", Message::CopyPassword);
+	let url_input = styled_text_input("url", password_entry.get_url())
+		.on_input(Message::PasswordEntryUrlInput)
+		.on_submit(Message::PasswordEntrySet);
+	let tags_input = styled_text_input("tags", password_entry.get_tags())
+		.on_input(Message::PasswordEntryTagsInput)
+		.on_submit(Message::PasswordEntrySet);
 	let note_editor =
 		styled_text_editor("note".into(), note).on_action(Message::PasswordEntryNoteAction);
 	let main_content = container(center(
@@ -155,9 +166,11 @@ pub fn password_screen<'a>(
 			username_input,
 			row![
 				password_input,
-				password_copy_btn,
+				password_copy_button,
 				password_visibility_toggle
 			],
+			url_input,
+			tags_input,
 			note_editor,
 		]
 		.spacing(4),
@@ -166,16 +179,15 @@ pub fn password_screen<'a>(
 	.width(Fill);
 	let button_bar = row![
 		space::horizontal(),
-		styled_button("Get", Message::PasswordEntryGet),
+		styled_button("Get", Message::PasswordEntryGet, DEFAULT_BUTTON_SIZE),
 		space::horizontal().width(20),
-		styled_button("Set", Message::PasswordEntrySet),
+		styled_button("Set", Message::PasswordEntrySet, DEFAULT_BUTTON_SIZE),
 		space::horizontal().width(20),
-		styled_button("Save", Message::Save),
+		styled_button("Save", Message::Save, DEFAULT_BUTTON_SIZE),
 		space::horizontal(),
 	]
 	.padding(16)
 	.align_y(Center);
-
 	let status_bar = container(center(
 		row![
 			text("> ").color(colors::BRAND_PURPLE),
@@ -188,11 +200,14 @@ pub fn password_screen<'a>(
 	.height(30)
 	.padding(1)
 	.width(Fill);
-
 	column![title_bar(), header, main_content, button_bar, status_bar].into()
 }
 
-pub fn styled_button<'a, Message: Clone + 'a>(label: &str, msg: Message) -> Element<'a, Message> {
+pub fn styled_button<'a, Message: Clone + 'a>(
+	label: &str,
+	msg: Message,
+	size: (u32, u32),
+) -> Element<'a, Message> {
 	button(
 		text(label.to_string())
 			.size(18)
@@ -204,8 +219,8 @@ pub fn styled_button<'a, Message: Clone + 'a>(label: &str, msg: Message) -> Elem
 				..Default::default()
 			}),
 	)
-	.width(120)
-	.height(40)
+	.width(size.0)
+	.height(size.1)
 	.style(|theme: &Theme, status: button::Status| {
 		let base = button::primary(theme, status);
 		match status {
