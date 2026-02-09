@@ -7,6 +7,7 @@ pub enum Message {
 	ClearClipboard,
 	CloseWindow,
 	CopyPassword,
+	CopyPin,
 	DbNameChanged(String),
 	DbPasswordChanged(String),
 	DragWindow,
@@ -15,6 +16,7 @@ pub enum Message {
 	PasswordEntryNameInput(String),
 	PasswordEntryNoteAction(text_editor::Action),
 	PasswordEntryPasswordInput(String),
+	PasswordEntryPinInput(String),
 	PasswordEntrySet,
 	PasswordEntryTagsInput(String),
 	PasswordEntryUrlInput(String),
@@ -25,5 +27,6 @@ pub enum Message {
 	SaveResult(String),
 	Tick,
 	TogglePasswordVisibility,
+	TogglePinVisibility,
 	UnlockResult(Database),
 }

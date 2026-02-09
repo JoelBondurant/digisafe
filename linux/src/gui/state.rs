@@ -16,6 +16,7 @@ struct UnlockedState {
 	query: String,
 	password_entry: PasswordEntry,
 	is_password_visible: bool,
+	is_pin_visible: bool,
 	last_copy_time: Option<Instant>,
 	last_interaction_time: Option<Instant>,
 	note: text_editor::Content,
@@ -83,12 +84,20 @@ fn view(app_state: &AppState) -> Element<'_, Message> {
 			query,
 			password_entry,
 			is_password_visible,
+			is_pin_visible,
 			last_copy_time: _,
 			last_interaction_time: _,
 			note,
 			status,
 			db: _,
-		}) => components::password_screen(query, password_entry, is_password_visible, note, status),
+		}) => components::password_screen(
+			query,
+			password_entry,
+			is_password_visible,
+			is_pin_visible,
+			note,
+			status,
+		),
 	}
 }
 
@@ -114,8 +123,9 @@ fn update_locked(message: Message, app_state: &mut AppState) -> Task<Message> {
 		Message::UnlockResult(db) => {
 			*app_state = AppState::Unlocked(UnlockedState {
 				query: "".into(),
-				password_entry: PasswordEntry::default(),
+				password_entry: PasswordEntry::new(),
 				is_password_visible: false,
+				is_pin_visible: false,
 				last_copy_time: None,
 				last_interaction_time: None,
 				note: text_editor::Content::new(),
@@ -145,6 +155,7 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		query,
 		password_entry,
 		is_password_visible,
+		is_pin_visible,
 		last_copy_time,
 		last_interaction_time,
 		note,
@@ -177,6 +188,9 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		Message::PasswordEntryPasswordInput(new_text) => {
 			password_entry.set_password(&new_text);
 		}
+		Message::PasswordEntryPinInput(new_text) => {
+			password_entry.set_pin(&new_text);
+		}
 		Message::PasswordEntryUrlInput(new_text) => {
 			password_entry.set_url(&new_text);
 		}
@@ -193,7 +207,7 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 				*note = text_editor::Content::with_text(found_password_entry.get_note());
 			} else {
 				*status = "Entry not retrieved.".to_string();
-				*password_entry = PasswordEntry::default();
+				*password_entry = PasswordEntry::new();
 				*note = text_editor::Content::new();
 			};
 		}
@@ -204,16 +218,18 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 				if let Some(mut old_entry) = db.get_password_entry(name) {
 					old_entry.set_username(password_entry.get_username());
 					old_entry.set_password(password_entry.get_password());
+					old_entry.set_pin(password_entry.get_pin());
 					old_entry.set_url(password_entry.get_url());
 					old_entry.set_tags(password_entry.get_tags());
 					old_entry.set_note(&note_string);
 					db.set_password_entry(old_entry);
 					*status = "Entry set.".to_string();
 				} else {
-					let mut new_entry = PasswordEntry::default();
+					let mut new_entry = PasswordEntry::new();
 					new_entry.set_name(name);
 					new_entry.set_username(password_entry.get_username());
 					new_entry.set_password(password_entry.get_password());
+					new_entry.set_pin(password_entry.get_pin());
 					new_entry.set_url(password_entry.get_url());
 					new_entry.set_tags(password_entry.get_tags());
 					new_entry.set_note(&note_string);
@@ -257,6 +273,24 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 					.clipboard(LCK::Clipboard)
 					.exclude_from_history()
 					.text(pw);
+				thread::sleep(COPY_TIMEOUT);
+			});
+		}
+		Message::TogglePinVisibility => {
+			*is_pin_visible = !*is_pin_visible;
+		}
+		Message::CopyPin => {
+			*last_copy_time = Some(Instant::now());
+			*status = "Pin copied.".to_string();
+			let pin = password_entry.get_pin().to_string();
+			thread::spawn(|| {
+				use arboard::{Clipboard, LinuxClipboardKind as LCK, SetExtLinux};
+				let mut cb = Clipboard::new().unwrap();
+				let _ = cb
+					.set()
+					.clipboard(LCK::Clipboard)
+					.exclude_from_history()
+					.text(pin);
 				thread::sleep(COPY_TIMEOUT);
 			});
 		}

@@ -141,6 +141,7 @@ pub fn password_screen<'a>(
 	query: &str,
 	password_entry: &PasswordEntry,
 	is_password_visible: &bool,
+	is_pin_visible: &bool,
 	note: &'a text_editor::Content,
 	status: &'a str,
 ) -> Element<'a, Message> {
@@ -177,6 +178,19 @@ pub fn password_screen<'a>(
 		Message::TogglePasswordVisibility,
 		mini_button_size,
 	);
+	let pin_input = styled_tooltip(
+		styled_text_input("pin", password_entry.get_pin())
+			.secure(!is_pin_visible)
+			.on_input(Message::PasswordEntryPinInput)
+			.on_submit(Message::PasswordEntrySet),
+		"Pin                    ",
+	);
+	let pin_copy_button = styled_button("📋", Message::CopyPin, mini_button_size);
+	let pin_visibility_toggle = styled_button(
+		if *is_pin_visible { "👀" } else { "👁" },
+		Message::TogglePinVisibility,
+		mini_button_size,
+	);
 	let url_input = styled_tooltip(
 		styled_text_input("url", password_entry.get_url())
 			.on_input(Message::PasswordEntryUrlInput)
@@ -202,6 +216,7 @@ pub fn password_screen<'a>(
 				password_copy_button,
 				password_visibility_toggle
 			],
+			row![pin_input, pin_copy_button, pin_visibility_toggle],
 			url_input,
 			tags_input,
 			note_editor,
@@ -226,6 +241,7 @@ pub fn password_screen<'a>(
 			text("> ").color(colors::BRAND_PURPLE),
 			text(status).color(colors::TEXT_STATUS),
 			space::horizontal(),
+			text(password_entry.get_timestamps()).color(colors::TEXT_STATUS),
 			text(" <").color(colors::BRAND_PURPLE)
 		]
 		.spacing(1),
