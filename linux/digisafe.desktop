@@ -1,11 +1,11 @@
 [Desktop Entry]
 Name=DigiSafe
 Comment=A digital safe for secure storage.
-Generic Nmae=Password Manager
-Exec=digisafe
+Generic Name=Password Manager
+Exec=bash -c "/usr/bin/digisafe 2>&1 | systemd-cat -t digisafe"
 Icon=digisafe
 Terminal=false
 Type=Application
 Categories=Utility;Security;
 Keywords=safe;vault;password;
-StartupNotify=true
+StartupNotify=false

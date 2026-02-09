@@ -1,11 +1,4 @@
-/*
-* Todo:
-* check for tpm boot parameters
-* check total memory encryption
-* check for full disk encryption
-* apparmor or selinux setup
-*/
-
+use crate::logger::{critical, info, warn};
 use libc::{
 	getrlimit, mlockall, prctl, rlimit, setrlimit, MCL_CURRENT, MCL_FUTURE, PR_SET_DUMPABLE,
 	RLIMIT_CORE, RLIMIT_MEMLOCK,
@@ -33,8 +26,12 @@ fn lock_memory_pages() {
 	unsafe {
 		let flags = MCL_CURRENT | MCL_FUTURE;
 		if mlockall(flags) != 0 {
-			eprintln!("Memory lock failure.");
-			eprintln!("Memory lock limits: {}.", get_memory_lock_limits());
+			critical("Memory lock failure.");
+			warn(&format!(
+				"Memory lock limits: {}.",
+				get_memory_lock_limits()
+			));
+			std::process::exit(1);
 		}
 	}
 }
@@ -61,13 +58,15 @@ pub fn force_secure_display() {
 fn verify_secure_display() {
 	let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
 	if session_type != "wayland" {
-		panic!("SECURITY VIOLATION: XDG_SESSION_TYPE must be set to wayland.");
+		critical("SECURITY VIOLATION: XDG_SESSION_TYPE must be set to wayland.");
+		std::process::exit(1);
 	}
 }
 
 fn check_env(var: &str) {
 	if env::var(var).map(|v| !v.is_empty()).unwrap_or(false) {
-		panic!("SECURITY VIOLATION: {} is set.", var);
+		critical(&format!("SECURITY VIOLATION: {} is set.", var));
+		std::process::exit(1);
 	}
 }
 
@@ -82,4 +81,5 @@ pub fn preflight() {
 	set_not_dumpable();
 	enforce_no_preload();
 	verify_secure_display();
+	info("Preflight security checks passed.");
 }

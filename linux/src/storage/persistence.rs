@@ -1,7 +1,10 @@
-use crate::storage::{
-	database::{Database, InteriorDatabase},
-	entry::MetaEntry,
-	secret::SecretMemory,
+use crate::{
+	logger::{critical, error, info},
+	storage::{
+		database::{Database, InteriorDatabase},
+		entry::MetaEntry,
+		secret::SecretMemory,
+	},
 };
 use std::{
 	collections::HashMap, env, fs, io::Write, mem, path::PathBuf, process::Command,
@@ -51,13 +54,16 @@ pub async fn load(db_name: &str, master_password: String) -> Database {
 	match db_remote_bin_opt {
 		None => {
 			if !path.exists() {
+				info("New database created.");
 				new_db(db_name, master_password)
 			} else {
+				info("Local database loaded, no matching remote.");
 				db_from_vec(from_file(db_name), master_password)
 			}
 		}
 		Some(db_remote_bin) => {
 			if !path.exists() {
+				info("Remote database loaded, no matching local.");
 				db_from_vec(db_remote_bin, master_password)
 			} else {
 				let db_local_envelope = db_envelope_from_vec(from_file(db_name));
@@ -78,8 +84,10 @@ pub async fn load(db_name: &str, master_password: String) -> Database {
 					.parse::<u64>()
 					.unwrap();
 				if ts_local >= ts_remote {
+					info("Local database loaded.");
 					db_from_envelope(db_local_envelope, master_key, nonce_local)
 				} else {
+					info("Remote database loaded.");
 					db_from_envelope(db_remote_envelope, master_key, nonce_remote)
 				}
 			}
@@ -133,8 +141,13 @@ fn db_from_envelope(
 	nonce: [u8; NONCE_SIZE],
 ) -> Database {
 	let db_encrypted_bin = from_base64(db_envelope.get_meta_entry("db").unwrap().get_value());
-	let db_compressed_bin = decrypt(db_encrypted_bin, &master_key, nonce).unwrap();
-	let db_bin = decompress(db_compressed_bin);
+	let db_compressed_bin_opt = decrypt(db_encrypted_bin, &master_key, nonce);
+	if db_compressed_bin_opt.is_none() {
+		error("Decryption failure.");
+		critical("Shutting down to prevent corruption.");
+		std::process::exit(1);
+	}
+	let db_bin = decompress(db_compressed_bin_opt.unwrap());
 	let db_core = InteriorDatabase::deserialize(&db_bin);
 	Database::old(master_key, db_core)
 }
@@ -155,6 +168,7 @@ pub async fn save(db: &Database) -> String {
 	let db_bin = db_to_vec(db);
 	to_file(&db_bin, &db_name);
 	upload_db(&db_bin, &db_name).await;
+	info("Database saved.");
 	"Database saved.".to_string()
 }
 
