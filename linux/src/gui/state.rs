@@ -1,6 +1,13 @@
 use crate::gui::{components, messages::Message};
 use crate::storage::{database::Database, entry::PasswordEntry, persistence};
-use iced::{application, widget::text_editor, window, Element, Size, Subscription, Task};
+use iced::{
+	application, keyboard,
+	widget::{
+		operation::{focus_next, focus_previous},
+		text_editor, Id,
+	},
+	window, Element, Event, Size, Subscription, Task,
+};
 use std::{
 	thread,
 	time::{Duration, Instant},
@@ -37,7 +44,8 @@ pub type Result = iced::Result;
 
 pub fn run() -> Result {
 	application(new, update, view)
-		.subscription(subscription)
+		.subscription(tick_subscription)
+		.subscription(tab_subscription)
 		.theme(components::theme())
 		.title(APP_NAME)
 		.window(window::Settings {
@@ -65,12 +73,29 @@ fn update(app_state: &mut AppState, message: Message) -> Task<Message> {
 	}
 }
 
-fn subscription(app_state: &AppState) -> Subscription<Message> {
+fn tick_subscription(app_state: &AppState) -> Subscription<Message> {
 	if let AppState::Unlocked(_) = &app_state {
 		iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick)
 	} else {
 		Subscription::none()
 	}
+}
+
+fn tab_subscription(_app_state: &AppState) -> Subscription<Message> {
+	iced::event::listen().map(|event| match event {
+		Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+			if key == keyboard::Key::Named(keyboard::key::Named::Tab) {
+				if modifiers.shift() {
+					Message::FocusPrevious
+				} else {
+					Message::FocusNext
+				}
+			} else {
+				Message::None
+			}
+		}
+		_ => Message::None,
+	})
 }
 
 fn view(app_state: &AppState) -> Element<'_, Message> {
@@ -144,6 +169,12 @@ fn update_locked(message: Message, app_state: &mut AppState) -> Task<Message> {
 		}
 		Message::DragWindow => {
 			return window::latest().and_then(window::drag);
+		}
+		Message::FocusPrevious => {
+			return focus_previous::<Id>().discard();
+		}
+		Message::FocusNext => {
+			return focus_next::<Id>().discard();
 		}
 		_ => {}
 	}
@@ -257,6 +288,12 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		}
 		Message::DragWindow => {
 			return window::latest().and_then(window::drag);
+		}
+		Message::FocusPrevious => {
+			return focus_previous::<Id>().discard();
+		}
+		Message::FocusNext => {
+			return focus_next::<Id>().discard();
 		}
 		Message::TogglePasswordVisibility => {
 			*is_password_visible = !*is_password_visible;

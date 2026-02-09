@@ -71,6 +71,12 @@ impl From<FieldAtlas> for PasswordEntry {
 	}
 }
 
+impl Default for PasswordEntry {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl PasswordEntry {
 	pub fn new() -> Self {
 		let now = SystemTime::now()
@@ -189,9 +195,9 @@ impl PasswordEntry {
 		let cdt_utc = Utc.timestamp_opt(cts, 0).unwrap();
 		let mdt_local = DateTime::<Local>::from(mdt_utc);
 		let cdt_local = DateTime::<Local>::from(cdt_utc);
-		let mdt = mdt_local.format("%Y-%m-%d %H:%M:%S");
-		let cdt = cdt_local.format("%Y-%m-%d %H:%M:%S");
-		format!("Modified: {mdt}, Created: {cdt} ")
+		let mdt = mdt_local.format("%Y-%m-%d %H:%M");
+		let cdt = cdt_local.format("%Y-%m-%d %H:%M");
+		format!("Modified: {mdt} | Created: {cdt} ")
 	}
 	pub fn serialize(&self) -> Zeroizing<Vec<u8>> {
 		self.field_atlas.serialize()

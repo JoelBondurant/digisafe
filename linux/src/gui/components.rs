@@ -96,9 +96,10 @@ pub fn unlock_screen<'a>(
 	let unlock_panel = container(center(
 		column![
 			center(text("Unlock Database").color(colors::BRAND_GREEN).size(18)).height(30),
-			styled_text_input("db_name...", db_name).on_input(Message::DbNameChanged),
+			styled_text_input("db_name...", db_name)
+				.on_input(Message::DbNameChanged)
+				.on_submit(Message::FocusNext),
 			styled_text_input("db_password...", db_password)
-				.on_input(Message::DbPasswordChanged)
 				.secure(true)
 				.on_input(Message::DbPasswordChanged)
 				.on_submit(Message::AttemptUnlock),
@@ -155,20 +156,20 @@ pub fn password_screen<'a>(
 	let name_input = styled_tooltip(
 		styled_text_input("name", password_entry.get_name())
 			.on_input(Message::PasswordEntryNameInput)
-			.on_submit(Message::PasswordEntrySet),
+			.on_submit(Message::FocusNext),
 		"Name  ",
 	);
 	let username_input = styled_tooltip(
 		styled_text_input("username", password_entry.get_username())
 			.on_input(Message::PasswordEntryUsernameInput)
-			.on_submit(Message::PasswordEntrySet),
+			.on_submit(Message::FocusNext),
 		"Username  ",
 	);
 	let password_input = styled_tooltip(
 		styled_text_input("password", password_entry.get_password())
 			.secure(!is_password_visible)
 			.on_input(Message::PasswordEntryPasswordInput)
-			.on_submit(Message::PasswordEntrySet),
+			.on_submit(Message::FocusNext),
 		"Password                    ",
 	);
 	let mini_button_size = (44, 44);
@@ -182,7 +183,7 @@ pub fn password_screen<'a>(
 		styled_text_input("pin", password_entry.get_pin())
 			.secure(!is_pin_visible)
 			.on_input(Message::PasswordEntryPinInput)
-			.on_submit(Message::PasswordEntrySet),
+			.on_submit(Message::FocusNext),
 		"Pin                    ",
 	);
 	let pin_copy_button = styled_button("📋", Message::CopyPin, mini_button_size);
@@ -194,13 +195,13 @@ pub fn password_screen<'a>(
 	let url_input = styled_tooltip(
 		styled_text_input("url", password_entry.get_url())
 			.on_input(Message::PasswordEntryUrlInput)
-			.on_submit(Message::PasswordEntrySet),
+			.on_submit(Message::FocusNext),
 		"URL  ",
 	);
 	let tags_input = styled_tooltip(
 		styled_text_input("tags", password_entry.get_tags())
 			.on_input(Message::PasswordEntryTagsInput)
-			.on_submit(Message::PasswordEntrySet),
+			.on_submit(Message::FocusNext),
 		"Tags  ",
 	);
 	let note_editor = styled_tooltip(
@@ -249,6 +250,7 @@ pub fn password_screen<'a>(
 	.height(30)
 	.padding(1)
 	.width(Fill);
+
 	column![title_bar(), header, main_content, button_bar, status_bar].into()
 }
 

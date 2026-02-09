@@ -17,7 +17,9 @@ pub fn get_memory_lock_limits() -> String {
 				rlim.rlim_cur, rlim.rlim_max
 			)
 		} else {
-			"Memlock limit error.".to_string()
+			let msg = "Memlock limit error.".to_string();
+			warn(&msg);
+			msg
 		}
 	}
 }
