@@ -3,7 +3,7 @@ use libc::{
 	getrlimit, mlockall, prctl, rlimit, setrlimit, MCL_CURRENT, MCL_FUTURE, PR_SET_DUMPABLE,
 	RLIMIT_CORE, RLIMIT_MEMLOCK,
 };
-use std::env;
+use std::{env, fs, process::Command};
 
 pub fn get_memory_lock_limits() -> String {
 	unsafe {
@@ -77,11 +77,31 @@ fn enforce_no_preload() {
 	check_env("LD_AUDIT");
 }
 
+fn check_tme() {
+	let cpu_info = fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+	let is_tme_active = cpu_info.contains(" tme ");
+	if !is_tme_active {
+		warn("Total Memory Encryption is not active.");
+	}
+}
+
+fn sniff_luks() {
+	let output =
+		String::from_utf8_lossy(&Command::new("lsblk").arg("-e7").output().unwrap().stdout)
+			.to_string();
+	let is_crypt = output.contains(" crypt ");
+	if !is_crypt {
+		warn("LUKS drive encryption not detected.");
+	}
+}
+
 pub fn preflight() {
 	force_secure_display();
 	lock_memory_pages();
 	set_not_dumpable();
 	enforce_no_preload();
 	verify_secure_display();
+	check_tme();
+	sniff_luks();
 	info("Preflight security checks passed.");
 }
