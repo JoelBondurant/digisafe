@@ -44,8 +44,12 @@ pub type Result = iced::Result;
 
 pub fn run() -> Result {
 	application(new, update, view)
-		.subscription(tick_subscription)
-		.subscription(tab_subscription)
+		.subscription(|app_state| {
+			Subscription::batch(vec![
+				tab_subscription(app_state),
+				tick_subscription(app_state),
+			])
+		})
 		.theme(components::theme())
 		.title(APP_NAME)
 		.window(window::Settings {
@@ -197,10 +201,13 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		unreachable!("update_unlocked called with locked state")
 	};
 	const IDLE_MESSAGE: &str = "Idle time remaining:";
-	if !matches!(message, Message::Tick) {
-		*last_interaction_time = Some(Instant::now());
-		if status.starts_with(IDLE_MESSAGE) {
-			*status = "".to_string();
+	match message {
+		Message::None | Message::Tick => {}
+		_ => {
+			*last_interaction_time = Some(Instant::now());
+			if status.starts_with(IDLE_MESSAGE) {
+				*status = "".to_string();
+			}
 		}
 	}
 	match message {
