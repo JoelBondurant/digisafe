@@ -239,7 +239,7 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 			note.perform(action);
 		}
 		Message::PasswordEntryGet => {
-			if let Some(found_password_entry) = db.get_password_entry(query) {
+			if let Some(found_password_entry) = db.query(query) {
 				*status = "Entry retrieved.".to_string();
 				*password_entry = found_password_entry.clone();
 				*note = text_editor::Content::with_text(found_password_entry.get_note());
@@ -253,7 +253,7 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 			let name = password_entry.get_name();
 			let note_string = note.text();
 			if !name.is_empty() {
-				if let Some(mut old_entry) = db.get_password_entry(name) {
+				if let Some(mut old_entry) = db.get_password_entry_by_name(name) {
 					old_entry.set_username(password_entry.get_username());
 					old_entry.set_password(password_entry.get_password());
 					old_entry.set_pin(password_entry.get_pin());

@@ -36,8 +36,27 @@ impl Database {
 	pub fn set_password_entry(&self, entry: PasswordEntry) {
 		self.idb.write().unwrap().set_password_entry(entry);
 	}
-	pub fn get_password_entry(&self, name: &str) -> Option<PasswordEntry> {
-		self.idb.read().unwrap().get_password_entry(name)
+	pub fn get_password_entry_by_name(&self, name: &str) -> Option<PasswordEntry> {
+		self.idb.read().unwrap().get_password_entry_by_name(name)
+	}
+	pub fn get_password_entries_by_tag(&self, tag: &str) -> Option<Vec<PasswordEntry>> {
+		self.idb.read().unwrap().get_password_entries_by_tag(tag)
+	}
+	pub fn query(&self, query: &str) -> Option<PasswordEntry> {
+		if let Some(entry) = self.get_password_entry_by_name(query) {
+			return Some(entry);
+		}
+		let tag_query = match query.split_once(".") {
+			Some((tag, tag_index_str)) => {
+				match tag_index_str.parse::<usize>().ok() {
+					Some(tag_index) => (tag, tag_index.saturating_sub(1)),
+					None => (query, 0),
+				}
+			}
+			_ => (query, 0),
+		};
+		self.get_password_entries_by_tag(tag_query.0)
+			.and_then(|entries| entries.get(tag_query.1).cloned())
 	}
 	pub fn set_meta_entry(&self, entry: MetaEntry) {
 		self.idb.write().unwrap().set_meta_entry(entry);
@@ -77,6 +96,7 @@ pub struct InteriorDatabase {
 	next_id: u32,
 	entries: EntryAtlas,
 	index_by_name: BTreeMap<String, u32>,
+	index_by_tag: BTreeMap<String, Vec<u32>>,
 }
 
 impl InteriorDatabase {
@@ -89,17 +109,33 @@ impl InteriorDatabase {
 			id = self.next_id;
 			self.next_id += 1;
 			self.index_by_name.insert(index_by_name_value, id);
+			for tag in entry.get_tags().split(",").map(|tg| tg.trim()) {
+				let index_by_tag_value = format!("tag\x00{}", tag);
+				self.index_by_tag.entry(index_by_tag_value).or_default().push(id);
+			}
 		} else {
 			id = *self.index_by_name.get(&index_by_name_value).unwrap();
 		}
 		self.entries
 			.set(id, EntryTag::Password as u8, entry.serialize().to_vec());
 	}
-	fn get_password_entry(&self, name: &str) -> Option<PasswordEntry> {
+	fn get_password_entry_by_name(&self, name: &str) -> Option<PasswordEntry> {
 		let index_by_name_value = format!("password\x00{}", name);
 		if let Some(id) = self.index_by_name.get(&index_by_name_value)
 			&& let Some(entry) = self.entries.get(*id) {
 			return Some(PasswordEntry::from(FieldAtlas::deserialize(&entry.1)));
+		}
+		None
+	}
+	fn get_password_entries_by_tag(&self, tag: &str) -> Option<Vec<PasswordEntry>> {
+		let index_by_tag_value = format!("tag\x00{}", tag);
+		if let Some(ids) = self.index_by_tag.get(&index_by_tag_value) {
+			let mut entries = vec![];
+			for id in ids {
+				let entry = self.entries.get(*id).unwrap();
+				entries.push(PasswordEntry::from(FieldAtlas::deserialize(&entry.1)));
+			}
+			return Some(entries);
 		}
 		None
 	}
@@ -155,6 +191,10 @@ impl InteriorDatabase {
 		}
 		let index_by_name = mem::take(&mut self.index_by_name);
 		for (mut key, _) in index_by_name {
+			key.zeroize();
+		}
+		let index_by_tag = mem::take(&mut self.index_by_tag);
+		for (mut key, _) in index_by_tag {
 			key.zeroize();
 		}
 	}
