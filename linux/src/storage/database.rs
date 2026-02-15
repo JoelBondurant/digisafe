@@ -58,6 +58,12 @@ impl Database {
 		self.get_password_entries_by_tag(tag_query.0)
 			.and_then(|entries| entries.get(tag_query.1).cloned())
 	}
+	pub fn previous(&self, name: &str) -> Option<PasswordEntry> {
+		self.idb.read().unwrap().previous(name)
+	}
+	pub fn next(&self, name: &str) -> Option<PasswordEntry> {
+		self.idb.read().unwrap().next(name)
+	}
 	pub fn set_meta_entry(&self, entry: MetaEntry) {
 		self.idb.write().unwrap().set_meta_entry(entry);
 	}
@@ -102,26 +108,29 @@ pub struct InteriorDatabase {
 impl InteriorDatabase {
 	fn set_password_entry(&mut self, entry: PasswordEntry) {
 		let name = entry.get_name();
-		let index_by_name_value = format!("password\x00{}", name);
-		let is_new = !self.index_by_name.contains_key(&index_by_name_value);
+		let index_by_name_key = format!("password\x00{}", name);
+		let is_new = !self.index_by_name.contains_key(&index_by_name_key);
 		let id: u32;
 		if is_new {
 			id = self.next_id;
 			self.next_id += 1;
-			self.index_by_name.insert(index_by_name_value, id);
+			self.index_by_name.insert(index_by_name_key, id);
 			for tag in entry.get_tags().split(",").map(|tg| tg.trim()) {
+				if tag.is_empty() {
+					continue;
+				}
 				let index_by_tag_value = format!("tag\x00{}", tag);
 				self.index_by_tag.entry(index_by_tag_value).or_default().push(id);
 			}
 		} else {
-			id = *self.index_by_name.get(&index_by_name_value).unwrap();
+			id = *self.index_by_name.get(&index_by_name_key).unwrap();
 		}
 		self.entries
 			.set(id, EntryTag::Password as u8, entry.serialize().to_vec());
 	}
 	fn get_password_entry_by_name(&self, name: &str) -> Option<PasswordEntry> {
-		let index_by_name_value = format!("password\x00{}", name);
-		if let Some(id) = self.index_by_name.get(&index_by_name_value)
+		let index_by_name_key = format!("password\x00{}", name);
+		if let Some(id) = self.index_by_name.get(&index_by_name_key)
 			&& let Some(entry) = self.entries.get(*id) {
 			return Some(PasswordEntry::from(FieldAtlas::deserialize(&entry.1)));
 		}
@@ -139,24 +148,49 @@ impl InteriorDatabase {
 		}
 		None
 	}
+	fn previous(&self, name: &str) -> Option<PasswordEntry> {
+		let lower_bound = "password\x00".to_string();
+		let index_by_name_key = format!("{lower_bound}{name}");
+		let previous_id = self.index_by_name.range(lower_bound..index_by_name_key).next_back().map(|kv| kv.1)?;
+		let (entry_tag, entry_data) = self.entries.get(*previous_id)?;
+		let entry_tag = unsafe { mem::transmute::<u8, EntryTag>(entry_tag) };
+		match entry_tag {
+			EntryTag::Password => Some(PasswordEntry::from(FieldAtlas::deserialize(&entry_data))),
+			_ => None,
+		}
+	}
+	fn next(&self, name: &str) -> Option<PasswordEntry> {
+		let lower_bound = "password\x00".to_string();
+		let upper_bound = "password\x7F".to_string();
+		let index_by_name_key = format!("{lower_bound}{name}");
+		let minimum_id = self.index_by_name.range(lower_bound..upper_bound.clone()).min().map(|kv| kv.1)?;
+		let offset = if self.index_by_name.contains_key(&index_by_name_key) { 1 } else { 0 };
+		let next_id = self.index_by_name.range(index_by_name_key..upper_bound).nth(offset).map(|kv| kv.1).unwrap_or(minimum_id);
+		let (entry_tag, entry_data) = self.entries.get(*next_id)?;
+		let entry_tag = unsafe { mem::transmute::<u8, EntryTag>(entry_tag) };
+		match entry_tag {
+			EntryTag::Password => Some(PasswordEntry::from(FieldAtlas::deserialize(&entry_data))),
+			_ => None,
+		}
+	}
 	fn set_meta_entry(&mut self, entry: MetaEntry) {
 		let name = entry.get_name();
-		let index_by_name_value = format!("meta\x00{}", name);
-		let is_new = !self.index_by_name.contains_key(&index_by_name_value);
+		let index_by_name_key = format!("meta\x00{}", name);
+		let is_new = !self.index_by_name.contains_key(&index_by_name_key);
 		let id: u32;
 		if is_new {
 			id = self.next_id;
 			self.next_id += 1;
-			self.index_by_name.insert(index_by_name_value, id);
+			self.index_by_name.insert(index_by_name_key, id);
 		} else {
-			id = *self.index_by_name.get(&index_by_name_value).unwrap();
+			id = *self.index_by_name.get(&index_by_name_key).unwrap();
 		}
 		self.entries
 			.set(id, EntryTag::Meta as u8, entry.serialize().to_vec());
 	}
 	pub fn get_meta_entry(&self, name: &str) -> Option<MetaEntry> {
-		let index_by_name_value = format!("meta\x00{}", name);
-		if let Some(id) = self.index_by_name.get(&index_by_name_value)
+		let index_by_name_key = format!("meta\x00{}", name);
+		if let Some(id) = self.index_by_name.get(&index_by_name_key)
 			&& let Some(entry) = self.entries.get(*id) {
 			return Some(MetaEntry::from(FieldAtlas::deserialize(&entry.1)));
 		}

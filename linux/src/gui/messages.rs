@@ -14,6 +14,8 @@ pub enum Message {
 	FocusNext,
 	FocusPrevious,
 	Lock,
+	NavigateNext,
+	NavigatePrevious,
 	None,
 	PasswordEntryGet,
 	PasswordEntryNameInput(String),

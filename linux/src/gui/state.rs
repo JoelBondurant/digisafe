@@ -46,7 +46,7 @@ pub fn run() -> Result {
 	application(new, update, view)
 		.subscription(|app_state| {
 			Subscription::batch(vec![
-				tab_subscription(app_state),
+				keyboard_subscription(app_state),
 				tick_subscription(app_state),
 			])
 		})
@@ -85,7 +85,7 @@ fn tick_subscription(app_state: &AppState) -> Subscription<Message> {
 	}
 }
 
-fn tab_subscription(_app_state: &AppState) -> Subscription<Message> {
+fn keyboard_subscription(_app_state: &AppState) -> Subscription<Message> {
 	iced::event::listen().map(|event| match event {
 		Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
 			if key == keyboard::Key::Named(keyboard::key::Named::Tab) {
@@ -93,6 +93,18 @@ fn tab_subscription(_app_state: &AppState) -> Subscription<Message> {
 					Message::FocusPrevious
 				} else {
 					Message::FocusNext
+				}
+			} else if key == keyboard::Key::Named(keyboard::key::Named::ArrowLeft) {
+				if modifiers.control() {
+					Message::NavigatePrevious
+				} else {
+					Message::None
+				}
+			} else if key == keyboard::Key::Named(keyboard::key::Named::ArrowRight) {
+				if modifiers.control() {
+					Message::NavigateNext
+				} else {
+					Message::None
 				}
 			} else {
 				Message::None
@@ -237,6 +249,28 @@ fn update_unlocked(message: Message, app_state: &mut AppState) -> Task<Message> 
 		}
 		Message::PasswordEntryNoteAction(action) => {
 			note.perform(action);
+		}
+		Message::NavigatePrevious => {
+			if let Some(found_password_entry) = db.previous(password_entry.get_name()) {
+				*status = "Previous entry retrieved.".to_string();
+				*password_entry = found_password_entry.clone();
+				*note = text_editor::Content::with_text(found_password_entry.get_note());
+			} else {
+				*status = "Previous entry not retrieved.".to_string();
+				*password_entry = PasswordEntry::new();
+				*note = text_editor::Content::new();
+			};
+		}
+		Message::NavigateNext => {
+			if let Some(found_password_entry) = db.next(password_entry.get_name()) {
+				*status = "Next entry retrieved.".to_string();
+				*password_entry = found_password_entry.clone();
+				*note = text_editor::Content::with_text(found_password_entry.get_note());
+			} else {
+				*status = "Next entry not retrieved.".to_string();
+				*password_entry = PasswordEntry::new();
+				*note = text_editor::Content::new();
+			};
 		}
 		Message::PasswordEntryGet => {
 			if let Some(found_password_entry) = db.query(query) {
