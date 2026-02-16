@@ -119,8 +119,8 @@ impl InteriorDatabase {
 				if tag.is_empty() {
 					continue;
 				}
-				let index_by_tag_value = format!("tag\x00{}", tag);
-				self.index_by_tag.entry(index_by_tag_value).or_default().push(id);
+				let index_by_tag_key = format!("tag\x00{}", tag);
+				self.index_by_tag.entry(index_by_tag_key).or_default().push(id);
 			}
 		} else {
 			id = *self.index_by_name.get(&index_by_name_key).unwrap();
@@ -137,8 +137,8 @@ impl InteriorDatabase {
 		None
 	}
 	fn get_password_entries_by_tag(&self, tag: &str) -> Option<Vec<PasswordEntry>> {
-		let index_by_tag_value = format!("tag\x00{}", tag);
-		if let Some(ids) = self.index_by_tag.get(&index_by_tag_value) {
+		let index_by_tag_key = format!("tag\x00{}", tag);
+		if let Some(ids) = self.index_by_tag.get(&index_by_tag_key) {
 			let mut entries = vec![];
 			for id in ids {
 				let entry = self.entries.get(*id).unwrap();
@@ -161,11 +161,10 @@ impl InteriorDatabase {
 	}
 	fn next(&self, name: &str) -> Option<PasswordEntry> {
 		let lower_bound = "password\x00".to_string();
-		let upper_bound = "password\x7F".to_string();
+		let upper_bound = "password\x01".to_string();
 		let index_by_name_key = format!("{lower_bound}{name}");
-		let minimum_id = self.index_by_name.range(lower_bound..upper_bound.clone()).min().map(|kv| kv.1)?;
 		let offset = if self.index_by_name.contains_key(&index_by_name_key) { 1 } else { 0 };
-		let next_id = self.index_by_name.range(index_by_name_key..upper_bound).nth(offset).map(|kv| kv.1).unwrap_or(minimum_id);
+		let next_id = self.index_by_name.range(index_by_name_key..upper_bound).nth(offset).map(|kv| kv.1)?;
 		let (entry_tag, entry_data) = self.entries.get(*next_id)?;
 		let entry_tag = unsafe { mem::transmute::<u8, EntryTag>(entry_tag) };
 		match entry_tag {
